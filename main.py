@@ -1,5 +1,7 @@
+import logging
 import os
-import scipy.misc
+import argparse
+# import scipy.misc
 import numpy as np
 import json
 
@@ -8,67 +10,70 @@ from utils import pp, visualize, to_json, show_all_variables, expand_path, times
 
 import tensorflow as tf
 
-flags = tf.app.flags
-flags.DEFINE_integer("epoch", 25, "Epoch to train [25]")
-flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
-flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
-flags.DEFINE_float("train_size", np.inf, "The size of train images [np.inf]")
-flags.DEFINE_integer("batch_size", 64, "The size of batch images [64]")
-flags.DEFINE_integer("input_height", 108, "The size of image to use (will be center cropped). [108]")
-flags.DEFINE_integer("input_width", None, "The size of image to use (will be center cropped). If None, same value as input_height [None]")
-flags.DEFINE_integer("output_height", 64, "The size of the output images to produce [64]")
-flags.DEFINE_integer("output_width", None, "The size of the output images to produce. If None, same value as output_height [None]")
-flags.DEFINE_string("dataset", "celebA", "The name of dataset [celebA, mnist, lsun]")
-flags.DEFINE_string("input_fname_pattern", "*.jpg", "Glob pattern of filename of input images [*]")
-flags.DEFINE_string("data_dir", "./data", "path to datasets [e.g. $HOME/data]")
-flags.DEFINE_string("out_dir", "./out", "Root directory for outputs [e.g. $HOME/out]")
-flags.DEFINE_string("out_name", "", "Folder (under out_root_dir) for all outputs. Generated automatically if left blank []")
-flags.DEFINE_string("checkpoint_dir", "checkpoint", "Folder (under out_root_dir/out_name) to save checkpoints [checkpoint]")
-flags.DEFINE_string("sample_dir", "samples", "Folder (under out_root_dir/out_name) to save samples [samples]")
-flags.DEFINE_boolean("train", False, "True for training, False for testing [False]")
-flags.DEFINE_boolean("crop", False, "True for training, False for testing [False]")
-flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
-flags.DEFINE_boolean("export", False, "True for exporting with new batch size")
-flags.DEFINE_boolean("freeze", False, "True for exporting with new batch size")
-flags.DEFINE_integer("max_to_keep", 1, "maximum number of checkpoints to keep")
-flags.DEFINE_integer("sample_freq", 200, "sample every this many iterations")
-flags.DEFINE_integer("ckpt_freq", 200, "save checkpoint every this many iterations")
-flags.DEFINE_integer("z_dim", 100, "dimensions of z")
-flags.DEFINE_string("z_dist", "uniform_signed", "'normal01' or 'uniform_unsigned' or uniform_signed")
-flags.DEFINE_boolean("G_img_sum", False, "Save generator image summaries in log")
-#flags.DEFINE_integer("generate_test_images", 100, "Number of images to generate during test. [100]")
-FLAGS = flags.FLAGS
+parser = argparse.ArgumentParser(description="Train, Test or Infer DCGAN")
+
+parser.add_argument("--epoch", type=int, default=25, help="Epoch to train [25]")
+parser.add_argument("--learning-rate", type=float, default=0.0002, help="Learning rate of for adam [0.0002]")
+parser.add_argument("--beta1", type=float, default=0.5, help="Momentum term of adam [0.5]")
+parser.add_argument("--train-size", default=np.inf, help="The size of train images [np.inf]")
+parser.add_argument("--batch-size", type=int, default=64, help="The size of batch images [64]")
+parser.add_argument("--input-height", type=int, default=108, help="The size of image to use (will be center cropped). [108]")
+parser.add_argument("--input-width", type=int, default=None, help="The size of image to use (will be center cropped). If None, same value as input_height [None]")
+parser.add_argument("--output-height", type=int, default=64, help="The size of the output images to produce [64]")
+parser.add_argument("--output-width", type=int, default=None, help="The size of the output images to produce. If None, same value as output_height [None]")
+parser.add_argument("--dataset", type=str, default="celebA", help="The name of dataset [celebA, mnist, lsun]")
+parser.add_argument("--input-fname-pattern", type=str, default="*.jpg", help="Glob pattern of filename of input images [*]")
+parser.add_argument("--data-dir", type=str, default="./data", help="path to datasets [e.g. $HOME/data]")
+parser.add_argument("--out-dir", type=str, default="./out", help="Root directory for outputs [e.g. $HOME/out]")
+parser.add_argument("--out-name", type=str, default="", help="Folder (under out_root_dir) for all outputs. Generated automatically if left blank []")
+parser.add_argument("--checkpoint-dir", type=str, default="checkpoint", help="Folder (under out_root_dir/out_name) to save checkpoints [checkpoint]")
+parser.add_argument("--sample-dir", type=str, default="samples", help="Folder (under out_root_dir/out_name) to save samples [samples]")
+parser.add_argument("--train", type=bool, default=False, help="True for training, False for testing [False]")
+parser.add_argument("--crop", type=bool, default=False, help="True for training, False for testing [False]")
+parser.add_argument("--visualize", type=bool, default=False, help="True for visualizing, False for nothing [False]")
+parser.add_argument("--export", type=bool, default=False, help="True for exporting with new batch size")
+parser.add_argument("--freeze", type=bool, default=False, help="True for exporting with new batch size")
+parser.add_argument("--max-to-keep", type=int, default=1, help="maximum number of checkpoints to keep")
+parser.add_argument("--sample-freq", type=int, default=200, help="sample every this many iterations")
+parser.add_argument("--ckpt-freq", type=int, default=200, help="save checkpoint every this many iterations")
+parser.add_argument("--z-dim", type=int, default=100, help="dimensions of z")
+parser.add_argument("--z-dist", type=str, default="uniform_signed", help="'normal01' or 'uniform_unsigned' or uniform_signed")
+parser.add_argument("--G-img-sum", type=bool, default=False, help="Save generator image summaries in log")
+parser.add_argument("--generate-test-images", type=int, default=100, help="Number of images to generate during test. [100]")
+
+
+args = parser.parse_args()
 
 def main(_):
-  pp.pprint(flags.FLAGS.__flags)
+  pp.pprint(args)
   
   # expand user name and environment variables
-  FLAGS.data_dir = expand_path(FLAGS.data_dir)
-  FLAGS.out_dir = expand_path(FLAGS.out_dir)
-  FLAGS.out_name = expand_path(FLAGS.out_name)
-  FLAGS.checkpoint_dir = expand_path(FLAGS.checkpoint_dir)
-  FLAGS.sample_dir = expand_path(FLAGS.sample_dir)
+  args.data_dir = expand_path(args.data_dir)
+  args.out_dir = expand_path(args.out_dir)
+  args.out_name = expand_path(args.out_name)
+  args.checkpoint_dir = expand_path(args.checkpoint_dir)
+  args.sample_dir = expand_path(args.sample_dir)
 
-  if FLAGS.output_height is None: FLAGS.output_height = FLAGS.input_height
-  if FLAGS.input_width is None: FLAGS.input_width = FLAGS.input_height
-  if FLAGS.output_width is None: FLAGS.output_width = FLAGS.output_height
+  if args.output_height is None: args.output_height = args.input_height
+  if args.input_width is None: args.input_width = args.input_height
+  if args.output_width is None: args.output_width = args.output_height
 
   # output folders
-  if FLAGS.out_name == "":
-      FLAGS.out_name = '{} - {} - {}'.format(timestamp(), FLAGS.data_dir.split('/')[-1], FLAGS.dataset) # penultimate folder of path
-      if FLAGS.train:
-        FLAGS.out_name += ' - x{}.z{}.{}.y{}.b{}'.format(FLAGS.input_width, FLAGS.z_dim, FLAGS.z_dist, FLAGS.output_width, FLAGS.batch_size)
+  if args.out_name == "":
+      args.out_name = '{} - {} - {}'.format(timestamp(), args.data_dir.split('/')[-1], args.dataset) # penultimate folder of path
+      if args.train:
+        args.out_name += ' - x{}.z{}.{}.y{}.b{}'.format(args.input_width, args.z_dim, args.z_dist, args.output_width, args.batch_size)
 
-  FLAGS.out_dir = os.path.join(FLAGS.out_dir, FLAGS.out_name)
-  FLAGS.checkpoint_dir = os.path.join(FLAGS.out_dir, FLAGS.checkpoint_dir)
-  FLAGS.sample_dir = os.path.join(FLAGS.out_dir, FLAGS.sample_dir)
+  args.out_dir = os.path.join(args.out_dir, args.out_name)
+  args.checkpoint_dir = os.path.join(args.out_dir, args.checkpoint_dir)
+  args.sample_dir = os.path.join(args.out_dir, args.sample_dir)
 
-  if not os.path.exists(FLAGS.checkpoint_dir): os.makedirs(FLAGS.checkpoint_dir)
-  if not os.path.exists(FLAGS.sample_dir): os.makedirs(FLAGS.sample_dir)
+  if not os.path.exists(args.checkpoint_dir): os.makedirs(args.checkpoint_dir)
+  if not os.path.exists(args.sample_dir): os.makedirs(args.sample_dir)
 
-  with open(os.path.join(FLAGS.out_dir, 'FLAGS.json'), 'w') as f:
-    flags_dict = {k:FLAGS[k].value for k in FLAGS}
-    json.dump(flags_dict, f, indent=4, sort_keys=True, ensure_ascii=False)
+  with open(os.path.join(args.out_dir, 'arguments.json'), 'w') as f:
+    arguments_dict = {k:args[k].value for k in args}
+    json.dump(arguments_dict, f, indent=4, sort_keys=True, ensure_ascii=False)
   
 
   #gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.333)
@@ -76,52 +81,52 @@ def main(_):
   run_config.gpu_options.allow_growth=True
 
   with tf.Session(config=run_config) as tf_session:
-    if FLAGS.dataset == 'mnist':
+    if args.dataset == 'mnist':
       dcgan = DCGAN(
           tf_session,
-          input_width=FLAGS.input_width,
-          input_height=FLAGS.input_height,
-          output_width=FLAGS.output_width,
-          output_height=FLAGS.output_height,
-          batch_size=FLAGS.batch_size,
-          sample_num=FLAGS.batch_size,
+          input_width=args.input_width,
+          input_height=args.input_height,
+          output_width=args.output_width,
+          output_height=args.output_height,
+          batch_size=args.batch_size,
+          sample_num=args.batch_size,
           y_dim=10,
-          z_dim=FLAGS.z_dim,
-          dataset_name=FLAGS.dataset,
-          input_fname_pattern=FLAGS.input_fname_pattern,
-          crop=FLAGS.crop,
-          checkpoint_dir=FLAGS.checkpoint_dir,
-          sample_dir=FLAGS.sample_dir,
-          data_dir=FLAGS.data_dir,
-          out_dir=FLAGS.out_dir,
-          max_to_keep=FLAGS.max_to_keep)
+          z_dim=args.z_dim,
+          dataset_name=args.dataset,
+          input_fname_pattern=args.input_fname_pattern,
+          crop=args.crop,
+          checkpoint_dir=args.checkpoint_dir,
+          sample_dir=args.sample_dir,
+          data_dir=args.data_dir,
+          out_dir=args.out_dir,
+          max_to_keep=args.max_to_keep)
     else:
       dcgan = DCGAN(
           tf_session,
-          input_width=FLAGS.input_width,
-          input_height=FLAGS.input_height,
-          output_width=FLAGS.output_width,
-          output_height=FLAGS.output_height,
-          batch_size=FLAGS.batch_size,
-          sample_num=FLAGS.batch_size,
-          z_dim=FLAGS.z_dim,
-          dataset_name=FLAGS.dataset,
-          input_fname_pattern=FLAGS.input_fname_pattern,
-          crop=FLAGS.crop,
-          checkpoint_dir=FLAGS.checkpoint_dir,
-          sample_dir=FLAGS.sample_dir,
-          data_dir=FLAGS.data_dir,
-          out_dir=FLAGS.out_dir,
-          max_to_keep=FLAGS.max_to_keep)
+          input_width=args.input_width,
+          input_height=args.input_height,
+          output_width=args.output_width,
+          output_height=args.output_height,
+          batch_size=args.batch_size,
+          sample_num=args.batch_size,
+          z_dim=args.z_dim,
+          dataset_name=args.dataset,
+          input_fname_pattern=args.input_fname_pattern,
+          crop=args.crop,
+          checkpoint_dir=args.checkpoint_dir,
+          sample_dir=args.sample_dir,
+          data_dir=args.data_dir,
+          out_dir=args.out_dir,
+          max_to_keep=args.max_to_keep)
 
     show_all_variables()
 
-    if FLAGS.train:
-      dcgan.train(FLAGS)
+    if args.train:
+      dcgan.train(args)
     else:
-      load_success, load_counter = dcgan.load(FLAGS.checkpoint_dir)
+      load_success, load_counter = dcgan.load(args.checkpoint_dir)
       if not load_success:
-        raise Exception("Checkpoint not found in " + FLAGS.checkpoint_dir)
+        raise Exception("Checkpoint not found in " + args.checkpoint_dir)
 
 
     # to_json("./web/js/layers.js", [dcgan.h0_w, dcgan.h0_b, dcgan.g_bn0],
@@ -131,17 +136,17 @@ def main(_):
     #                 [dcgan.h4_w, dcgan.h4_b, None])
 
     # Below is codes for visualization
-      if FLAGS.export:
-        export_dir = os.path.join(FLAGS.checkpoint_dir, 'export_b'+str(FLAGS.batch_size))
+      if args.export:
+        export_dir = os.path.join(args.checkpoint_dir, 'export_b'+str(args.batch_size))
         dcgan.save(export_dir, load_counter, ckpt=True, frozen=False)
 
-      if FLAGS.freeze:
-        export_dir = os.path.join(FLAGS.checkpoint_dir, 'frozen_b'+str(FLAGS.batch_size))
+      if args.freeze:
+        export_dir = os.path.join(args.checkpoint_dir, 'frozen_b'+str(args.batch_size))
         dcgan.save(export_dir, load_counter, ckpt=False, frozen=True)
 
-      if FLAGS.visualize:
+      if args.visualize:
         OPTION = 1
-        visualize(tf_session, dcgan, FLAGS, OPTION, FLAGS.sample_dir)
+        visualize(tf_session, dcgan, args, OPTION, args.sample_dir)
 
 if __name__ == '__main__':
   tf.app.run()

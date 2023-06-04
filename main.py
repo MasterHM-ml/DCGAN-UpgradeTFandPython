@@ -44,7 +44,7 @@ parser.add_argument("--generate-test-images", type=int, default=100, help="Numbe
 
 args = parser.parse_args()
 
-def main(_):
+def main(args):
   pp.pprint(args)
   
   # expand user name and environment variables
@@ -149,4 +149,5 @@ def main(_):
         visualize(tf_session, dcgan, args, OPTION, args.sample_dir)
 
 if __name__ == '__main__':
-  tf.app.run()
+  # tf.app.run()
+  main(args)

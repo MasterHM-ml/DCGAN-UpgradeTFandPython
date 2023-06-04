@@ -18,7 +18,7 @@ import argparse
 import requests
 import subprocess
 from tqdm import tqdm
-from six.moves import urllib
+from six.moves import urllib # pyright: ignore
 
 parser = argparse.ArgumentParser(description='Download dataset for DCGAN.')
 parser.add_argument('datasets', metavar='N', type=str, nargs='+', choices=['celebA', 'lsun', 'mnist'],

@@ -4,6 +4,7 @@ Some codes from https://github.com/Newmu/dcgan_code
 from __future__ import division
 import math
 import json
+import moviepy
 import random
 import pprint
 import scipy.misc
@@ -13,7 +14,8 @@ import os
 import time
 import datetime
 from time import gmtime, strftime
-from six.moves import xrange
+from six.moves import xrange # pyright: ignore
+import PIL
 from PIL import Image
 
 import tensorflow as tf
@@ -187,11 +189,11 @@ def make_gif(images, fname, duration=2, true_image=False):
   clip = mpy.VideoClip(make_frame, duration=duration)
   clip.write_gif(fname, fps = len(images) / duration)
 
-def visualize(sess, dcgan, config, option, sample_dir='samples'):
+def visualize(tf_session, dcgan, config, option, sample_dir='samples'):
   image_frame_dim = int(math.ceil(config.batch_size**.5))
   if option == 0:
     z_sample = np.random.uniform(-0.5, 0.5, size=(config.batch_size, dcgan.z_dim))
-    samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
+    samples = tf_session.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
     save_images(samples, [image_frame_dim, image_frame_dim], os.path.join(sample_dir, 'test_%s.png' % strftime("%Y%m%d%H%M%S", gmtime() )))
   elif option == 1:
     values = np.arange(0, 1, 1./config.batch_size)
@@ -206,9 +208,9 @@ def visualize(sess, dcgan, config, option, sample_dir='samples'):
         y_one_hot = np.zeros((config.batch_size, 10))
         y_one_hot[np.arange(config.batch_size), y] = 1
 
-        samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample, dcgan.y: y_one_hot})
+        samples = tf_session.run(dcgan.sampler, feed_dict={dcgan.z: z_sample, dcgan.y: y_one_hot})
       else:
-        samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
+        samples = tf_session.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
 
       save_images(samples, [image_frame_dim, image_frame_dim], os.path.join(sample_dir, 'test_arange_%s.png' % (idx)))
   elif option == 2:
@@ -226,9 +228,9 @@ def visualize(sess, dcgan, config, option, sample_dir='samples'):
         y_one_hot = np.zeros((config.batch_size, 10))
         y_one_hot[np.arange(config.batch_size), y] = 1
 
-        samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample, dcgan.y: y_one_hot})
+        samples = tf_session.run(dcgan.sampler, feed_dict={dcgan.z: z_sample, dcgan.y: y_one_hot})
       else:
-        samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
+        samples = tf_session.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
 
       try:
         make_gif(samples, './samples/test_gif_%s.gif' % (idx))
@@ -242,7 +244,7 @@ def visualize(sess, dcgan, config, option, sample_dir='samples'):
       for kdx, z in enumerate(z_sample):
         z[idx] = values[kdx]
 
-      samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
+      samples = tf_session.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
       make_gif(samples, os.path.join(sample_dir, 'test_gif_%s.gif' % (idx)))
   elif option == 4:
     image_set = []
@@ -253,7 +255,7 @@ def visualize(sess, dcgan, config, option, sample_dir='samples'):
       z_sample = np.zeros([config.batch_size, dcgan.z_dim])
       for kdx, z in enumerate(z_sample): z[idx] = values[kdx]
 
-      image_set.append(sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample}))
+      image_set.append(tf_session.run(dcgan.sampler, feed_dict={dcgan.z: z_sample}))
       make_gif(image_set[-1], os.path.join(sample_dir, 'test_gif_%s.gif' % (idx)))
 
     new_image_set = [merge(np.array([images[idx] for images in image_set]), [10, 10]) \

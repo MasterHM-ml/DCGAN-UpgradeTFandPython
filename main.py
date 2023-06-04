@@ -75,10 +75,10 @@ def main(_):
   run_config = tf.ConfigProto()
   run_config.gpu_options.allow_growth=True
 
-  with tf.Session(config=run_config) as sess:
+  with tf.Session(config=run_config) as tf_session:
     if FLAGS.dataset == 'mnist':
       dcgan = DCGAN(
-          sess,
+          tf_session,
           input_width=FLAGS.input_width,
           input_height=FLAGS.input_height,
           output_width=FLAGS.output_width,
@@ -97,7 +97,7 @@ def main(_):
           max_to_keep=FLAGS.max_to_keep)
     else:
       dcgan = DCGAN(
-          sess,
+          tf_session,
           input_width=FLAGS.input_width,
           input_height=FLAGS.input_height,
           output_width=FLAGS.output_width,
@@ -141,7 +141,7 @@ def main(_):
 
       if FLAGS.visualize:
         OPTION = 1
-        visualize(sess, dcgan, FLAGS, OPTION, FLAGS.sample_dir)
+        visualize(tf_session, dcgan, FLAGS, OPTION, FLAGS.sample_dir)
 
 if __name__ == '__main__':
   tf.app.run()

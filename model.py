@@ -6,7 +6,7 @@ import math
 from glob import glob
 import tensorflow as tf
 import numpy as np
-from six.moves import xrange
+from six.moves import xrange # pyright: ignore
 
 from ops import *
 from utils import *
@@ -21,7 +21,7 @@ def gen_random(mode, size):
 
 
 class DCGAN(object):
-  def __init__(self, sess, input_height=108, input_width=108, crop=True,
+  def __init__(self, tf_session, input_height=108, input_width=108, crop=True,
          batch_size=64, sample_num = 64, output_height=64, output_width=64,
          y_dim=None, z_dim=100, gf_dim=64, df_dim=64,
          gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='default',
@@ -30,17 +30,17 @@ class DCGAN(object):
     """
 
     Args:
-      sess: TensorFlow session
+      tf_session: TensorFlow session
       batch_size: The size of batch. Should be specified before training.
       y_dim: (optional) Dimension of dim for y. [None]
       z_dim: (optional) Dimension of dim for Z. [100]
       gf_dim: (optional) Dimension of gen filters in first conv layer. [64]
-      df_dim: (optional) Dimension of discrim filters in first conv layer. [64]
+      df_dim: (optional) Dimension of discriminator filters in first conv layer. [64]
       gfc_dim: (optional) Dimension of gen units for for fully connected layer. [1024]
-      dfc_dim: (optional) Dimension of discrim units for fully connected layer. [1024]
+      dfc_dim: (optional) Dimension of discriminator units for fully connected layer. [1024]
       c_dim: (optional) Dimension of image color. For grayscale input, set to 1. [3]
     """
-    self.sess = sess
+    self.tf_session = tf_session
     self.crop = crop
 
     self.batch_size = batch_size
@@ -176,7 +176,7 @@ class DCGAN(object):
       self.g_sum = merge_summary([self.z_sum, self.d__sum, self.d_loss_fake_sum, self.g_loss_sum])
     self.d_sum = merge_summary(
         [self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
-    self.writer = SummaryWriter(os.path.join(self.out_dir, "logs"), self.sess.graph)
+    self.writer = SummaryWriter(os.path.join(self.out_dir, "logs"), self.tf_session.graph)
 
     sample_z = gen_random(config.z_dist, size=(self.sample_num , self.z_dim))
     
@@ -240,7 +240,7 @@ class DCGAN(object):
 
         if config.dataset == 'mnist':
           # Update D network
-          _, summary_str = self.sess.run([d_optim, self.d_sum],
+          _, summary_str = self.tf_session.run([d_optim, self.d_sum],
             feed_dict={ 
               self.inputs: batch_images,
               self.z: batch_z,
@@ -249,7 +249,7 @@ class DCGAN(object):
           self.writer.add_summary(summary_str, counter)
 
           # Update G network
-          _, summary_str = self.sess.run([g_optim, self.g_sum],
+          _, summary_str = self.tf_session.run([g_optim, self.g_sum],
             feed_dict={
               self.z: batch_z, 
               self.y:batch_labels,
@@ -257,7 +257,7 @@ class DCGAN(object):
           self.writer.add_summary(summary_str, counter)
 
           # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-          _, summary_str = self.sess.run([g_optim, self.g_sum],
+          _, summary_str = self.tf_session.run([g_optim, self.g_sum],
             feed_dict={ self.z: batch_z, self.y:batch_labels })
           self.writer.add_summary(summary_str, counter)
           
@@ -275,17 +275,17 @@ class DCGAN(object):
           })
         else:
           # Update D network
-          _, summary_str = self.sess.run([d_optim, self.d_sum],
+          _, summary_str = self.tf_session.run([d_optim, self.d_sum],
             feed_dict={ self.inputs: batch_images, self.z: batch_z })
           self.writer.add_summary(summary_str, counter)
 
           # Update G network
-          _, summary_str = self.sess.run([g_optim, self.g_sum],
+          _, summary_str = self.tf_session.run([g_optim, self.g_sum],
             feed_dict={ self.z: batch_z })
           self.writer.add_summary(summary_str, counter)
 
           # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-          _, summary_str = self.sess.run([g_optim, self.g_sum],
+          _, summary_str = self.tf_session.run([g_optim, self.g_sum],
             feed_dict={ self.z: batch_z })
           self.writer.add_summary(summary_str, counter)
           
@@ -299,7 +299,7 @@ class DCGAN(object):
 
         if np.mod(counter, config.sample_freq) == 0:
           if config.dataset == 'mnist':
-            samples, d_loss, g_loss = self.sess.run(
+            samples, d_loss, g_loss = self.tf_session.run(
               [self.sampler, self.d_loss, self.g_loss],
               feed_dict={
                   self.z: sample_z,
@@ -312,7 +312,7 @@ class DCGAN(object):
             print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
           else:
             try:
-              samples, d_loss, g_loss = self.sess.run(
+              samples, d_loss, g_loss = self.tf_session.run(
                 [self.sampler, self.d_loss, self.g_loss],
                 feed_dict={
                     self.z: sample_z,
@@ -524,13 +524,13 @@ class DCGAN(object):
       os.makedirs(checkpoint_dir)
 
     if ckpt:
-      self.saver.save(self.sess,
+      self.saver.save(self.tf_session,
               os.path.join(checkpoint_dir, filename),
               global_step=step)
 
     if frozen:
       tf.train.write_graph(
-              tf.graph_util.convert_variables_to_constants(self.sess, self.sess.graph_def, ["generator_1/Tanh"]),
+              tf.graph_util.convert_variables_to_constants(self.tf_session, self.tf_session.graph_def, ["generator_1/Tanh"]),
               checkpoint_dir,
               '{}-{:06d}_frz.pb'.format(filename, step),
               as_text=False)
@@ -544,7 +544,7 @@ class DCGAN(object):
     ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
     if ckpt and ckpt.model_checkpoint_path:
       ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-      self.saver.restore(self.sess, os.path.join(checkpoint_dir, ckpt_name))
+      self.saver.restore(self.tf_session, os.path.join(checkpoint_dir, ckpt_name))
       #counter = int(next(re.finditer("(\d+)(?!.*\d)",ckpt_name)).group(0))
       counter = int(ckpt_name.split('-')[-1])
       print(" [*] Success to read {}".format(ckpt_name))

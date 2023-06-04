@@ -1,4 +1,4 @@
-# DCGAN in Tensorflow
+# DCGAN in Tensorflow 2.13.0rc1
 
 Tensorflow implementation of [Deep Convolutional Generative Adversarial Networks](http://arxiv.org/abs/1511.06434) which is a stabilize Generative Adversarial Networks. The referenced torch code can be found [here](https://github.com/soumith/dcgan.torch).
 
@@ -17,8 +17,8 @@ Tensorflow implementation of [Deep Convolutional Generative Adversarial Networks
 
 ## Prerequisites
 
-- Python 2.7 or Python 3.3+
-- [Tensorflow 0.12.1](https://github.com/tensorflow/tensorflow/tree/r0.12)
+- Python 3.10.6
+- Tensorflow 2.13.0rc1
 - [SciPy](http://www.scipy.org/install.html)
 - [pillow](https://github.com/python-pillow/Pillow)
 - [tqdm](https://pypi.org/project/tqdm/)
@@ -83,8 +83,6 @@ After 10th epoch:
 
 ### MNIST
 
-MNIST codes are written by [@PhoenixDai](https://github.com/PhoenixDai).
-
 ![mnist_result1](assets/mnist1.png)
 
 ![mnist_result2](assets/mnist2.png)
@@ -118,4 +116,4 @@ Details of the histogram of true and fake result of discriminator (with custom d
 
 ## Author
 
-Taehoon Kim / [@carpedm20](http://carpedm20.github.io/)
+MasterHM / [@MasterHM-ml](https://github.com/MasterHM-ml/)

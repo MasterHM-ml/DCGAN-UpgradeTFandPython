@@ -72,7 +72,7 @@ def main(args):
   if not os.path.exists(args.sample_dir): os.makedirs(args.sample_dir)
 
   with open(os.path.join(args.out_dir, 'arguments.json'), 'w') as f:
-    arguments_dict = {k:args[k].value for k in args}
+    arguments_dict = vars(args)
     json.dump(arguments_dict, f, indent=4, sort_keys=True, ensure_ascii=False)
   
 

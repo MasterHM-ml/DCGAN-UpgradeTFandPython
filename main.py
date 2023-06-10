@@ -43,9 +43,9 @@ parser.add_argument("--generate-test-images", type=int, default=100, help="Numbe
 
 
 args = parser.parse_args()
+logging.info(args)
 
 def main(args):
-  pp.pprint(args)
   
   # expand user name and environment variables
   args.data_dir = expand_path(args.data_dir)

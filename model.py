@@ -5,6 +5,7 @@ import time
 import math
 from glob import glob
 import tensorflow as tf
+from tensorflow.keras import layers  # pyright: ignore
 import numpy as np
 from six.moves import xrange # pyright: ignore
 
@@ -105,7 +106,8 @@ class DCGAN(object):
 
   def build_model(self):
     if self.y_dim:
-      self.y = tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
+      # self.y = tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
+      self.y = tf.Variable(tf.zeros([self.batch_size, self.y_dim]), dtype=tf.float32)
     else:
       self.y = None
 
@@ -114,13 +116,15 @@ class DCGAN(object):
     else:
       image_dims = [self.input_height, self.input_width, self.c_dim]
 
-    self.inputs = tf.placeholder(
-      tf.float32, [self.batch_size] + image_dims, name='real_images')
+    # self.inputs = tf.placeholder(
+    #   tf.float32, [self.batch_size] + image_dims, name='real_images')
+    self.inputs = tf.Variable(tf.zeros([self.batch_size]+image_dims), dtype=tf.floats32)
 
     inputs = self.inputs
 
-    self.z = tf.placeholder(
-      tf.float32, [None, self.z_dim], name='z')
+    # self.z = tf.placeholder(
+    #   tf.float32, [None, self.z_dim], name='z')
+    self.z = tf.Variable(tf.zeros([None, self.z_dim]), dtype=tf.float32)
     self.z_sum = histogram_summary("z", self.z)
 
     self.G                  = self.generator(self.z, self.y)
@@ -361,7 +365,7 @@ class DCGAN(object):
         
         return tf.nn.sigmoid(h3), h3
 
-  def generator(self, z, y=None):
+  def generator_v1(self, z_data, y_data=None):
     with tf.variable_scope("generator") as scope:
       if not self.y_dim:
         s_h, s_w = self.output_height, self.output_width
@@ -372,7 +376,7 @@ class DCGAN(object):
 
         # project `z` and reshape
         self.z_, self.h0_w, self.h0_b = linear(
-            z, self.gf_dim*8*s_h16*s_w16, 'g_h0_lin', with_w=True)
+            z_data, self.gf_dim*8*s_h16*s_w16, 'g_h0_lin', with_w=True)
 
         self.h0 = tf.reshape(
             self.z_, [-1, s_h16, s_w16, self.gf_dim * 8])
@@ -400,12 +404,12 @@ class DCGAN(object):
         s_w2, s_w4 = int(s_w/2), int(s_w/4)
 
         # yb = tf.expand_dims(tf.expand_dims(y, 1),2)
-        yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
-        z = concat([z, y], 1)
+        yb = tf.reshape(y_data, [self.batch_size, 1, 1, self.y_dim])
+        z_data = concat([z_data, y_data], 1)
 
         h0 = tf.nn.relu(
-            self.g_bn0(linear(z, self.gfc_dim, 'g_h0_lin')))
-        h0 = concat([h0, y], 1)
+            self.g_bn0(linear(z_data, self.gfc_dim, 'g_h0_lin')))
+        h0 = concat([h0, y_data], 1)
 
         h1 = tf.nn.relu(self.g_bn1(
             linear(h0, self.gf_dim*2*s_h4*s_w4, 'g_h1_lin')))
@@ -419,6 +423,83 @@ class DCGAN(object):
 
         return tf.nn.sigmoid(
             deconv2d(h2, [self.batch_size, s_h, s_w, self.c_dim], name='g_h3'))
+
+  def generator(self, z, y=None):
+    if not self.y_dim:
+      s_h, s_w = self.output_height, self.output_width
+      s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
+      s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
+      s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
+      s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
+
+      model = tf.keras.Sequential()
+      
+      model.add(layers.Dense(self.gf_dim*8*s_h16*s_w16, use_bias=True, input_shape=[None, z.get_shape()[1]]))
+      model.add(layers.BatchNormalization())
+      model.add(layers.LeakyReLU())
+
+      model.add(layers.Reshape((s_h16, s_w16, self.gf_dim * 8)))
+      assert model.output_shape == (None, s_h16, s_w16, self.gf_dim * 8)  # Note: None is the batch size
+
+      model.add(layers.Conv2DTranspose(self.gf_dim*4, (5, 5), strides=(2, 2), padding='same', use_bias=True))
+      assert model.output_shape == (None, s_h8, s_w8, self.gf_dim*4)
+      model.add(layers.BatchNormalization())
+      model.add(layers.LeakyReLU())
+
+      model.add(layers.Conv2DTranspose(self.gf_dim*2, (5, 5), strides=(2, 2), padding='same', use_bias=True))
+      assert model.output_shape == (None, s_h4, s_w4, self.gf_dim*2)
+      model.add(layers.BatchNormalization())
+      model.add(layers.LeakyReLU())
+
+      model.add(layers.Conv2DTranspose(self.gf_dim, (5, 5), strides=(2, 2), padding='same', use_bias=True))
+      assert model.output_shape == (None, s_h2, s_w2, self.gf_dim)
+      model.add(layers.BatchNormalization())
+      model.add(layers.LeakyReLU())
+
+      model.add(layers.Conv2DTranspose(self.c_dim, (5, 5), strides=(2, 2), padding='same', use_bias=True, activation='tanh'))
+      assert model.output_shape == (None, s_h, s_w, self.c_dim)
+
+      return model
+    
+    else:
+      s_h, s_w = self.output_height, self.output_width
+      s_h2, s_h4 = int(s_h/2), int(s_h/4)
+      s_w2, s_w4 = int(s_w/2), int(s_w/4)
+
+      yb = tf.reshape(y, [self.batch_size, 1 , 1, self.y_dim])
+      z = tf.concat([z, y], 1)
+
+      model = tf.keras.Sequential()
+
+      model.add(tf.keras.layers.Dense(self.gfc_dim, use_bias=True, input_shape=[None, z.get_shape()[1]]))
+      model.add(tf.keras.layers.BatchNormalization())
+      model.add(tf.keras.layers.LeakyReLU())
+      model.add(tf.keras.layers.Concatenate(axis=1)[model.output, y])
+      assert model.output_shape == (None, self.gfc_dim, y.get_shape()[1])
+
+      model.add(tf.keras.layers.Dense(self.gf_dim*2*s_h4*s_w4, use_bias=True, ))
+      model.add(tf.keras.layers.BatchNormalization())
+      model.add(tf.keras.layers.LeakyReLU())
+      model.add(tf.keras.layers.Reshape(s_h4, s_w4, self.gf_dim * 2))
+      model.add(conv_cond_concat(x=model.output, y=yb))
+      assert model.output_shape == (None, s_h4, s_w4, self.gf_dim * 2)
+
+      model.add(tf.keras.layers.Conv2DTranspose(self.gf_dim * 2, (5, 5), strides=(2, 2), padding='same', use_bias=True))
+      model.add(tf.keras.layers.BatchNormalization())
+      model.add(tf.keras.layers.LeakyReLU())
+      model.add(conv_cond_concat(model.output, yb))
+      assert model.output_shape == (None, s_h2, s_w2, self.gf_dim*2)
+
+      model.add(tf.keras.layers.Conv2DTranspose(self.c_dim, (5, 5), strides=(2, 2), padding='same', use_bias=True, activation="sigmoid"))
+      assert model.output==(None, s_h, s_w, self.c_dim)
+      return model
+
+
+
+
+
+
+
 
   def sampler(self, z, y=None):
     with tf.variable_scope("generator") as scope:

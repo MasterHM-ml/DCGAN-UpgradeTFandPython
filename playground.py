@@ -1,3 +1,21 @@
+import math
+
+def conv_out_size_same(size, stride):
+  return int(math.ceil(float(size) / float(stride)))
+
+s_h, s_w = 28, 28
+print(s_h, s_w)
+s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
+print(s_h2, s_w2)
+s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
+print(s_h4, s_w4)
+s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
+print(s_h8, s_w8)
+s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
+print(s_h16, s_w16)
+
+
+
 # import math
 # def conv_out_size_same(size, stride):
 #   return int(math.ceil(float(size) / float(stride)))
@@ -6,56 +24,144 @@
 #   out = conv_out_size_same(out, 2)
 #   print(out)
 
-import tensorflow as tf
-from tensorflow.keras import layers # pyright: ignore
-import math
+# import tensorflow as tf
+# from tensorflow.keras import layers # pyright: ignore
+# import math
 
-def conv_out_size_same(size, stride):
-  return int(math.ceil(float(size) / float(stride)))
+# def conv_out_size_same(size, stride):
+#   return int(math.ceil(float(size) / float(stride)))
 
-output_height = output_width = 64
-gf_dim=64
-z_dim=100
-c_dim=3
-# z = tf.Variable(tf.zeros([None, z_dim]), dtype=tf.float32)
-z = tf.zeros([1, z_dim], dtype=tf.float32)
-s_h, s_w = output_height, output_width
-s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
-s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
-s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
-s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
+# def conv_cond_concat(x, y):
+#   """Concatenate conditioning vector on feature map axis."""
+#   x_shapes = x.get_shape()
+#   y_shapes = y.get_shape()
+#   return tf.concat([
+#     x, y*tf.ones([x_shapes[0], x_shapes[1], x_shapes[2], y_shapes[3]])], 3)
 
-
-
-model = tf.keras.Sequential()
-      
-model.add(layers.Dense(gf_dim*8*s_h16*s_w16, use_bias=True, input_shape=[None, z.get_shape()[1]]))
-model.add(layers.BatchNormalization())
-model.add(layers.LeakyReLU())
-
-model.add(layers.Reshape((s_h16, s_w16, gf_dim * 8)))
-assert model.output_shape == (None, s_h16, s_w16, gf_dim * 8)  # Note: None is the batch size
-
-model.add(layers.Conv2DTranspose(gf_dim*4, (5, 5), strides=(2, 2), padding='same', use_bias=True))
-assert model.output_shape == (None, s_h8, s_w8, gf_dim*4)
-model.add(layers.BatchNormalization())
-model.add(layers.LeakyReLU())
-
-model.add(layers.Conv2DTranspose(gf_dim*2, (5, 5), strides=(2, 2), padding='same', use_bias=True))
-assert model.output_shape == (None, s_h4, s_w4, gf_dim*2)
-model.add(layers.BatchNormalization())
-model.add(layers.LeakyReLU())
-
-model.add(layers.Conv2DTranspose(gf_dim, (5, 5), strides=(2, 2), padding='same', use_bias=True))
-assert model.output_shape == (None, s_h2, s_w2, gf_dim)
-model.add(layers.BatchNormalization())
-model.add(layers.LeakyReLU())
-
-model.add(layers.Conv2DTranspose(c_dim, (5, 5), strides=(2, 2), padding='same', use_bias=True, activation='tanh'))
-assert model.output_shape == (None, s_h, s_w, c_dim)
+# output_height = output_width = 64
+# gf_dim=64
+# z_dim=100
+# c_dim=3
+# gfc_dim=1024
+# batch_size=128
+# y_dim=100
+# y=tf.zeros([batch_size, y_dim], dtype=tf.float32)
+# z = tf.zeros([1, z_dim], dtype=tf.float32)
+# s_h, s_w = output_height, output_width
+# s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
+# s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
+# s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
+# s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
 
 
-x=0
+
+
+# if not y_dim:
+#   s_h, s_w = output_height, output_width
+#   s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
+#   s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
+#   s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
+#   s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
+
+#   model = tf.keras.Sequential()
+  
+#   model.add(layers.Dense(gf_dim*8*s_h16*s_w16, use_bias=True, input_shape=[None, z.get_shape()[1]]))
+#   model.add(layers.BatchNormalization())
+#   model.add(layers.LeakyReLU())
+
+#   model.add(layers.Reshape((s_h16, s_w16, gf_dim * 8)))
+#   assert model.output_shape == (None, s_h16, s_w16, gf_dim * 8)  # Note: None is the batch size
+
+#   model.add(layers.Conv2DTranspose(gf_dim*4, (5, 5), strides=(2, 2), padding='same', use_bias=True))
+#   assert model.output_shape == (None, s_h8, s_w8, gf_dim*4)
+#   model.add(layers.BatchNormalization())
+#   model.add(layers.LeakyReLU())
+
+#   model.add(layers.Conv2DTranspose(gf_dim*2, (5, 5), strides=(2, 2), padding='same', use_bias=True))
+#   assert model.output_shape == (None, s_h4, s_w4, gf_dim*2)
+#   model.add(layers.BatchNormalization())
+#   model.add(layers.LeakyReLU())
+
+#   model.add(layers.Conv2DTranspose(gf_dim, (5, 5), strides=(2, 2), padding='same', use_bias=True))
+#   assert model.output_shape == (None, s_h2, s_w2, gf_dim)
+#   model.add(layers.BatchNormalization())
+#   model.add(layers.LeakyReLU())
+
+#   model.add(layers.Conv2DTranspose(c_dim, (5, 5), strides=(2, 2), padding='same', use_bias=True, activation='tanh'))
+#   assert model.output_shape == (None, s_h, s_w, c_dim)
+
+#   # return model
+
+# else:
+#   s_h, s_w = output_height, output_width
+#   s_h2, s_h4 = int(s_h/2), int(s_h/4)
+#   s_w2, s_w4 = int(s_w/2), int(s_w/4)
+
+#   yb = tf.reshape(y, [batch_size, 1 , 1, y_dim])
+#   z = tf.concat([z, y], 1)
+
+#   model = tf.keras.Sequential()
+
+#   model.add(tf.keras.layers.Dense(gfc_dim, use_bias=True, input_shape=[None, z.get_shape()[1]]))
+#   model.add(tf.keras.layers.BatchNormalization())
+#   model.add(tf.keras.layers.LeakyReLU())
+#   model.add(tf.keras.layers.Concatenate(axis=1)[model.output, y])
+#   assert model.output_shape == (None, gfc_dim, y.get_shape()[1])
+
+#   model.add(tf.keras.layers.Dense(gf_dim*2*s_h4*s_w4, use_bias=True, ))
+#   model.add(tf.keras.layers.BatchNormalization())
+#   model.add(tf.keras.layers.LeakyReLU())
+#   model.add(tf.keras.layers.Reshape(s_h4, s_w4, gf_dim * 2))
+#   model.add(conv_cond_concat(x=model.output, y=yb))
+#   assert model.output_shape == (None, s_h4, s_w4, gf_dim * 2)
+
+#   model.add(tf.keras.layers.Conv2DTranspose(gf_dim * 2, (5, 5), strides=(2, 2), padding='same', use_bias=True))
+#   model.add(tf.keras.layers.BatchNormalization())
+#   model.add(tf.keras.layers.LeakyReLU())
+#   model.add(conv_cond_concat(model.output, yb))
+#   assert model.output_shape == (None, s_h2, s_w2, gf_dim*2)
+
+#   model.add(tf.keras.layers.Conv2DTranspose(c_dim, (5, 5), strides=(2, 2), padding='same', use_bias=True, activation="sigmoid"))
+#   assert model.output==(None, s_h, s_w, c_dim)
+#   # return model
+
+
+
+# x=0
+
+# import tensorflow as tf
+# df_dim = 64
+# batch_size=64
+# image = tf.zeros([64, 64, 3], dtype=tf.float32)
+# model = tf.keras.Sequential()
+# model.add(tf.keras.layers.Conv2D(df_dim, (5,5), (2,2), "same", use_bias=True, input_shape=image.shape,
+#                                   kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.02, seed=None),
+#                                   bias_initializer=tf.keras.initializers.Constant(value=0),))
+# model.add(tf.keras.layers.LeakyReLU())
+# # model.add(tf.keras.layers.Dropout(0.3)) - repo not doing this, but paper do this
+
+# model.add(tf.keras.layers.Conv2D(df_dim*2, (5,5), (2,2,), "same", use_bias=True,
+#                                   kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.02, seed=None),
+#                                   bias_initializer=tf.keras.initializers.Constant(value=0),))
+# model.add(tf.keras.layers.LeakyReLU())
+
+# model.add(tf.keras.layers.Conv2D(df_dim*4, (5,5), (2,2,), "same", use_bias=True,
+#                                   kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.02, seed=None),
+#                                   bias_initializer=tf.keras.initializers.Constant(value=0),))
+# model.add(tf.keras.layers.LeakyReLU())
+
+# model.add(tf.keras.layers.Conv2D(df_dim*8, (5,5), (2,2,), "same", use_bias=True,
+#                                   kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.02, seed=None),
+#                                   bias_initializer=tf.keras.initializers.Constant(value=0),))
+# model.add(tf.keras.layers.LeakyReLU())
+
+# model.add(tf.keras.layers.Flatten())
+# model.add(tf.keras.layers.Dense(1, use_bias=True, 
+#                                 kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02, seed=None),
+#                                 bias_initializer=tf.keras.initializers.Constant(value=0),))
+# h4_logits = model.output
+# model.add(tf.keras.layers.Activation(tf.nn.sigmoid))
+
 
 
 

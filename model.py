@@ -3,6 +3,7 @@ from __future__ import print_function
 from typing import List, Dict
 import os
 import time
+from datetime import datetime
 import math
 import logging
 from tqdm import trange
@@ -98,14 +99,14 @@ class DCGAN(object):
     self.dataset_name = dataset_name
     self.data_dir = data_dir
     self.input_fname_pattern = input_fname_pattern
-    self.out_dir = os.path.join(out_dir, self.dataset_name)
+    self.out_dir = os.path.join(out_dir, self.dataset_name+str(datetime.now().date()))
 
     self.checkpoint_dir = os.path.join(self.out_dir, checkpoint_dir)
     self.checkpoint_best_model = os.path.join(self.checkpoint_dir, "best_model")
     self.checkpoint_best_gen = os.path.join(self.checkpoint_best_model, "gen")
     self.checkpoint_best_dis = os.path.join(self.checkpoint_best_model, "dis")
     self.max_to_keep = max_to_keep
-    self.sample_dir = os.path.join(self.out_dir, sample_dir)
+    self.sample_dir = os.path.join(self.out_dir, sample_dir+str(datetime.now()))
 
     if self.dataset_name in ["mnist", "fashion_mnist", "cifar10", "cifar100"]:
       self.data_X, self.data_Y = self.load_builtin_dataset()
@@ -664,7 +665,7 @@ class DCGAN(object):
     self.d_optim.apply_gradients(zip(gradients_of_discriminator, self.discriminator_model.trainable_variables))
 
 
-  def generate_and_save_images(self, model, epoch, test_input):
+  def generate_and_save_images(self, model, epoch, test_input,):
     predictions = model(test_input, training=False)
 
     fig = plt.figure(figsize=(4, 4))
@@ -677,14 +678,30 @@ class DCGAN(object):
         plt.imshow(predictions[i, :, :, 0] * 127.5 + 127.5, cmap=cmap_)
         plt.axis('off')
 
-    plt.savefig(os.path.join(self.sample_dir, 'image_at_epoch_{:04d}.png'.format(epoch)))
+    plt.savefig(os.path.join(self.sample_dir, f'image_at_{epoch}.png'))
     plt.show()
 
-    fig = plt.figure(figsize=(4, 4))
-    plt.plot(self.losses.discriminator.epoch_loss, label="Discriminator Loss", linewidth=2, marker="*")
-    plt.plot(self.losses.generator.epoch_loss, label="Generator Loss", linewidth=2, marker="*")
-    plt.savefig(os.path.join(self.sample_dir, "losses.png"))
+    if self.train:
+      fig = plt.figure(figsize=(4, 4))
+      plt.plot(self.losses.discriminator.epoch_loss, label="Discriminator Loss", linewidth=2, marker="*")
+      plt.plot(self.losses.generator.epoch_loss, label="Generator Loss", linewidth=2, marker="*")
+      plt.savefig(os.path.join(self.sample_dir, "losses.png"))
 
+  def load_and_generate_images(self, args):
+    logging.info(" [*] Reading checkpoints... %s" % args.checkpoint_dir)
+    try:
+      imported = tf.saved_model.load(args.checkpoint_dir)
+      self.generator_model = imported.signature["serving_default"]
+      
+      z = tf.random.normal([args.generate_test_images, self.z_dim])
+      self.generate_and_save_images(self.generator_model, "test", z)
+      return True
+    except Exception as e:
+      logging.info(" [*] Failed to find checkpoint")
+      logging.info(e)
+      return False
+  
+  
   # def sampler(self, z, y=None):
   #   with tf.variable_scope("generator") as scope:
   #     scope.reuse_variables()
@@ -765,20 +782,32 @@ class DCGAN(object):
   #             '{}-{:06d}_frz.pb'.format(filename, step),
   #             as_text=False)
 
-  def load(self, checkpoint_dir):
-    #import re
-    print(" [*] Reading checkpoints...", checkpoint_dir)
-    # checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
-    # print("     ->", checkpoint_dir)
+  # def load_and_generate_images(self, args):
+  #   #import re
+  #   logging.info(" [*] Reading checkpoints... %s" % args.checkpoint_dir)
+  #   try:
+  #     imported = tf.saved_model.load(args.checkpoint_dir)
+  #     self.generator_model = imported.signature["serving_default"]
+      
+  #     z = tf.random.normal([args.generate_test_images, self.z_dim])
+  #     self.generate_and_save_images(self.generator_model, "test", z)
+  #     return True
+  #   except Exception as e:
+  #     logging.info(" [*] Failed to find checkpoint")
+  #     logging.info(e)
+  #     return False
 
-    ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
-    if ckpt and ckpt.model_checkpoint_path:
-      ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-      self.saver.restore(self.tf_session, os.path.join(checkpoint_dir, ckpt_name))
-      #counter = int(next(re.finditer("(\d+)(?!.*\d)",ckpt_name)).group(0))
-      counter = int(ckpt_name.split('-')[-1])
-      print(" [*] Success to read {}".format(ckpt_name))
-      return True, counter
-    else:
-      print(" [*] Failed to find a checkpoint")
-      return False, 0
+      
+
+
+    # ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+    # if ckpt and ckpt.model_checkpoint_path:
+    #   ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+    #   self.saver.restore(self.tf_session, os.path.join(checkpoint_dir, ckpt_name))
+    #   #counter = int(next(re.finditer("(\d+)(?!.*\d)",ckpt_name)).group(0))
+    #   counter = int(ckpt_name.split('-')[-1])
+    #   print(" [*] Success to read {}".format(ckpt_name))
+    #   return True, counter
+    # else:
+    #   print(" [*] Failed to find a checkpoint")
+    #   return False, 0

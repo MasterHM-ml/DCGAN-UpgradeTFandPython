@@ -85,31 +85,9 @@ class DCGAN(object):
     self.max_to_keep = max_to_keep
 
     if self.dataset_name in ["mnist", "fashion_mnist", "cifar10", "cifar100"]:
-      self.data_X, self.data_y = self.load_builtin_dataset()
+      self.data_X, self.data_Y = self.load_builtin_dataset()
     else:
-      data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
-      logging.info("loading custom data from %s." % data_path)
-      logging.info("Please make sure all images are either RGB (3 channels) or grayscale (1 channels). Got argument 'c_dim'=%d" % self.c_dim)
-      self.data_X = glob(data_path)
-      if len(self.data_X) == 0: raise Exception("[!] No data found in '" + data_path + "'")
-      if len(self.data_X) < self.batch_size: raise Exception("[!] Entire dataset size is less than the configured batch_size")
-        
-      if self.c_dim==1:
-        self.data_X = np.stack([transform(np.array(Image.open(x).convert('L')),\
-                                          self.input_height, self.input_width,\
-                                          self.output_height, self.output_width, self.crop)\
-                                          for x in self.data_X])
-      elif self.c_dim==3:
-        self.data_X = np.stack([transform(np.array(Image.open(x).convert('RGB')),\
-                                          self.input_height, self.input_width,\
-                                          self.output_height, self.output_width, self.crop)\
-                                          for x in self.data_X])
-      else:
-        raise Exception("[!] Unknown color dimension. Got argument 'c_dim'=%d" % self.c_dim)
-      
-      self.buffer_size = self.data_X.shape[0]
-      self.data_y = np.ones(self.data_X.shape[0])
-      self.data_X = tf.data.Dataset.from_tensor_slices(self.data_X).shuffle(self.buffer_size).batch(self.batch_size)
+      self.data_X, self.data_Y = self.load_custom_dataset()
       
     # self.grayscale = (self.c_dim == 1)
 
@@ -195,48 +173,51 @@ class DCGAN(object):
     #     [self.z_sum, self.discriminator_model_summary, self.d_loss_real_sum, self.d_loss_sum])
     # self.writer = SummaryWriter(os.path.join(self.out_dir, "logs"), self.tf_session.graph)
 
-    sample_z = gen_random(config.z_dist, size=(self.sample_num , self.z_dim))
-    
-    if config.dataset == 'mnist':
-      sample_inputs = self.data_X[0:self.sample_num]
-      sample_labels = self.data_y[0:self.sample_num]
-    else:
-      sample_files = self.data_X[0:self.sample_num]
-      sample = [
-          get_image(sample_file,
-                    input_height=self.input_height,
-                    input_width=self.input_width,
-                    resize_height=self.output_height,
-                    resize_width=self.output_width,
-                    crop=self.crop,
-                    grayscale=self.grayscale) for sample_file in sample_files]
-      if (self.grayscale):
-        sample_inputs = np.array(sample).astype(np.float32)[:, :, :, None]
-      else:
-        sample_inputs = np.array(sample).astype(np.float32)
+    sample_z = gen_random(config.z_dist, size=(self.batch_size , self.z_dim))
+    # sample_inputs = self.data_X[0:self.batch_size]
+    sample_inputs = next(iter(self.data_X))
+    sample_labels = self.data_Y[0:self.batch_size]
+    # if config.dataset == 'mnist':
+    #   sample_inputs = self.data_X[0:self.batch_size]
+    #   sample_labels = self.data_y[0:self.sample_num]
+    # else:
+    #   sample_files = self.data_X[0:self.sample_num]
+    #   sample = [
+    #       get_image(sample_file,
+    #                 input_height=self.input_height,
+    #                 input_width=self.input_width,
+    #                 resize_height=self.output_height,
+    #                 resize_width=self.output_width,
+    #                 crop=self.crop,
+    #                 grayscale=self.grayscale) for sample_file in sample_files]
+    #   if (self.grayscale):
+    #     sample_inputs = np.array(sample).astype(np.float32)[:, :, :, None]
+    #   else:
+    #     sample_inputs = np.array(sample).astype(np.float32)
   
     counter = 1
     start_time = time.time()
-    could_load, checkpoint_counter = self.load(self.checkpoint_dir)
-    if could_load:
-      counter = checkpoint_counter
-      print(" [*] Load SUCCESS")
-    else:
-      print(" [!] Load failed...")
+    # TODO resume training
+    # could_load, checkpoint_counter = self.load(self.checkpoint_dir)
+    # if could_load:
+    #   counter = checkpoint_counter
+    #   print(" [*] Load SUCCESS")
+    # else:
+    #   print(" [!] Load failed...")
 
     for epoch in xrange(config.epoch):
-      if config.dataset == 'mnist':
-        batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
-      else:      
-        self.data_X = glob(os.path.join(
-          config.data_dir, config.dataset, self.input_fname_pattern))
-        np.random.shuffle(self.data_X)
-        batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
+      # if config.dataset == 'mnist':
+      #   batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
+      # else:      
+      #   self.data_X = glob(os.path.join(
+      #     config.data_dir, config.dataset, self.input_fname_pattern))
+      #   np.random.shuffle(self.data_X)
+      #   batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
 
-      for idx in xrange(0, int(batch_idxs)):
+      for idx, (X, Y) in enumerate(zip(self.data_X, self.data_Y)):
         if config.dataset == 'mnist':
           batch_images = self.data_X[idx*config.batch_size:(idx+1)*config.batch_size]
-          batch_labels = self.data_y[idx*config.batch_size:(idx+1)*config.batch_size]
+          batch_labels = self.data_Y[idx*config.batch_size:(idx+1)*config.batch_size]
         else:
           batch_files = self.data_X[idx*config.batch_size:(idx+1)*config.batch_size]
           batch = [
@@ -562,8 +543,36 @@ class DCGAN(object):
     self.buffer_size = train_images.shape[0]
     test_dataset = np.ones(train_dataset.shape[0])
     train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(self.buffer_size).batch(self.batch_size)
+    test_dataset = tf.data.Dataset.from_tensor_slices(test_dataset).shuffle(self.buffer_size).batch(self.batch_size)
     return train_dataset, test_dataset
-  
+  def load_custom_dataset(self):
+    data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
+    logging.info("loading custom data from %s." % data_path)
+    if self.c_dim is None:
+      raise ValueError("with custom data, c-dim argument is required. 1 if your data is grayscale or 3 if your dataset is RGB images")
+    logging.warning("Please make sure all images are either RGB (3 channels) or grayscale (1 channels). Got argument 'c_dim'=%d" % self.c_dim)
+    path_to_images = glob(data_path)
+    if len(path_to_images) == 0: raise Exception("[!] No data found in '" + data_path + "'")
+    if len(path_to_images) < self.batch_size: raise Exception("[!] Entire dataset size is less than the configured batch_size")
+      
+    if self.c_dim==1:
+      data_X_np = np.stack([transform(np.array(Image.open(x).convert('L')),\
+                                        self.input_height, self.input_width,\
+                                        self.output_height, self.output_width, self.crop)\
+                                        for x in path_to_images])
+    elif self.c_dim==3:
+      data_X_np = np.stack([transform(np.array(Image.open(x).convert('RGB')),\
+                                        self.input_height, self.input_width,\
+                                        self.output_height, self.output_width, self.crop)\
+                                        for x in path_to_images])
+    else:
+      raise Exception("[!] Unknown color dimension. Got argument 'c_dim'=%d" % self.c_dim)
+    
+    self.buffer_size = data_X_np.shape[0]
+    train_dataset_y = tf.data.Dataset.from_tensor_slices(np.ones(data_X_np.shape[0])).shuffle(self.buffer_size).batch(self.batch_size)
+    train_dataset_x = tf.data.Dataset.from_tensor_slices(data_X_np).shuffle(self.buffer_size).batch(self.batch_size)
+    return train_dataset_x, train_dataset_y
+
 
   def generator_loss(self, fake_output):
     return self.cross_entropy(tf.ones_like(fake_output), fake_output)
@@ -654,20 +663,20 @@ class DCGAN(object):
   #             '{}-{:06d}_frz.pb'.format(filename, step),
   #             as_text=False)
 
-  # def load(self, checkpoint_dir):
-  #   #import re
-  #   print(" [*] Reading checkpoints...", checkpoint_dir)
-  #   # checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
-  #   # print("     ->", checkpoint_dir)
+  def load(self, checkpoint_dir):
+    #import re
+    print(" [*] Reading checkpoints...", checkpoint_dir)
+    # checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
+    # print("     ->", checkpoint_dir)
 
-  #   ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
-  #   if ckpt and ckpt.model_checkpoint_path:
-  #     ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-  #     self.saver.restore(self.tf_session, os.path.join(checkpoint_dir, ckpt_name))
-  #     #counter = int(next(re.finditer("(\d+)(?!.*\d)",ckpt_name)).group(0))
-  #     counter = int(ckpt_name.split('-')[-1])
-  #     print(" [*] Success to read {}".format(ckpt_name))
-  #     return True, counter
-  #   else:
-  #     print(" [*] Failed to find a checkpoint")
-  #     return False, 0
+    ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+    if ckpt and ckpt.model_checkpoint_path:
+      ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+      self.saver.restore(self.tf_session, os.path.join(checkpoint_dir, ckpt_name))
+      #counter = int(next(re.finditer("(\d+)(?!.*\d)",ckpt_name)).group(0))
+      counter = int(ckpt_name.split('-')[-1])
+      print(" [*] Success to read {}".format(ckpt_name))
+      return True, counter
+    else:
+      print(" [*] Failed to find a checkpoint")
+      return False, 0

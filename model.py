@@ -86,7 +86,7 @@ class DCGAN(object):
 
     if self.dataset_name in ["mnist", "fashion_mnist", "cifar10", "cifar100"]:
       self.data_X, self.data_y = self.load_builtin_dataset()
-      self.c_dim = self.data_X[0].shape[-1]
+      # self.c_dim = self.data_X[0].shape[-1]
     else:
       data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
       logging.info("loading custom data from %s." % data_path)

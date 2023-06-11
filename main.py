@@ -26,7 +26,7 @@ parser.add_argument("--input-fname-pattern", type=str, default="*.jpg", help="Gl
 parser.add_argument("--data-dir", type=str, default="./data", help="path to datasets [e.g. $HOME/data]")
 parser.add_argument("--out-dir", type=str, default="./out", help="Root directory for outputs [e.g. $HOME/out]")
 parser.add_argument("--out-name", type=str, default="", help="Folder (under out_root_dir) for all outputs. Generated automatically if left blank []")
-parser.add_argument("--checkpoint-dir", type=str, default="checkpoint", help="Folder (under out_root_dir/out_name) to save checkpoints [checkpoint]")
+parser.add_argument("--checkpoint-dir", type=str, required=True, help="Folder (under out_root_dir/dataset+current date) to save checkpoints e.g. out/mnist_2023-06-11/checkpoint]")
 parser.add_argument("--sample-dir", type=str, default="samples", help="Folder (under out_root_dir/out_name) to save samples [samples]")
 parser.add_argument("--train", type=bool, default=False, help="True for training, False for testing [False]")
 parser.add_argument("--crop", type=bool, default=False, help="True for training, False for testing [False]")

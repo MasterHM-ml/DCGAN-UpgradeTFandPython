@@ -99,14 +99,14 @@ class DCGAN(object):
     self.dataset_name = dataset_name
     self.data_dir = data_dir
     self.input_fname_pattern = input_fname_pattern
-    self.out_dir = os.path.join(out_dir, self.dataset_name+str(datetime.now().date()))
+    self.out_dir = os.path.join(out_dir, f"{self.dataset_name}_{datetime.now().date()}")
 
     self.checkpoint_dir = os.path.join(self.out_dir, checkpoint_dir)
     self.checkpoint_best_model = os.path.join(self.checkpoint_dir, "best_model")
     self.checkpoint_best_gen = os.path.join(self.checkpoint_best_model, "gen")
     self.checkpoint_best_dis = os.path.join(self.checkpoint_best_model, "dis")
     self.max_to_keep = max_to_keep
-    self.sample_dir = os.path.join(self.out_dir, sample_dir+str(datetime.now()))
+    self.sample_dir = os.path.join(self.out_dir, f"{sample_dir}_{datetime.now()}")
 
     if self.dataset_name in ["mnist", "fashion_mnist", "cifar10", "cifar100"]:
       self.data_X, self.data_Y = self.load_builtin_dataset()

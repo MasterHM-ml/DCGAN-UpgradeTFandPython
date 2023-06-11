@@ -1,12 +1,17 @@
 from __future__ import division
 from __future__ import print_function
+from typing import List, Dict
 import os
 import time
+from datetime import datetime
 import math
 import logging
+from tqdm import trange
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 from glob import glob
 import tensorflow as tf
+import matplotlib.pyplot as plt
 from tensorflow.keras import layers  # pyright: ignore
 import numpy as np
 from six.moves import xrange # pyright: ignore
@@ -21,6 +26,20 @@ def gen_random(mode, size):
     if mode=='normal01': return np.random.normal(0,1,size=size)
     if mode=='uniform_signed': return np.random.uniform(-1,1,size=size)
     if mode=='uniform_unsigned': return np.random.uniform(0,1,size=size)
+
+
+
+
+class Losses:
+  def __init__(self):
+    self.running_loss = List
+    self.epoch_loss = List
+
+class ModelLosses:
+  def __init__(self):
+    self.discriminator = Losses()
+    self.generator = Losses()
+
 
 
 class DCGAN(object):
@@ -78,35 +97,21 @@ class DCGAN(object):
     #   self.g_bn3 = batch_norm(name='g_bn3')
 
     self.dataset_name = dataset_name
-    self.input_fname_pattern = input_fname_pattern
-    self.checkpoint_dir = checkpoint_dir
     self.data_dir = data_dir
-    self.out_dir = out_dir
+    self.input_fname_pattern = input_fname_pattern
+    self.out_dir = os.path.join(out_dir, self.dataset_name+str(datetime.now().date()))
+
+    self.checkpoint_dir = os.path.join(self.out_dir, checkpoint_dir)
+    self.checkpoint_best_model = os.path.join(self.checkpoint_dir, "best_model")
+    self.checkpoint_best_gen = os.path.join(self.checkpoint_best_model, "gen")
+    self.checkpoint_best_dis = os.path.join(self.checkpoint_best_model, "dis")
     self.max_to_keep = max_to_keep
+    self.sample_dir = os.path.join(self.out_dir, sample_dir+str(datetime.now()))
 
     if self.dataset_name in ["mnist", "fashion_mnist", "cifar10", "cifar100"]:
-      self.data_X, self.data_y = self.load_builtin_dataset()
-      self.c_dim = self.data_X[0].shape[-1]
+      self.data_X, self.data_Y = self.load_builtin_dataset()
     else:
-      data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
-      logging.info("loading custom data from %s." % data_path)
-      logging.info("Please make sure all images are either RGB (3 channels) or grayscale (1 channels). Got argument 'c_dim'=%d" % self.c_dim)
-      self.data_X = glob(data_path)
-      if len(self.data_X) == 0: raise Exception("[!] No data found in '" + data_path + "'")
-      if len(self.data_X) < self.batch_size: raise Exception("[!] Entire dataset size is less than the configured batch_size")
-        
-      if self.c_dim==1:
-        self.data_X = np.stack([np.reshape(np.array(Image.open(x).convert('L')), (self.input_height, self.input_width)) for x in self.data_X])
-      elif self.c_dim==3:
-        self.data_X = np.stack([np.reshape(np.array(Image.open(x).convert('RGB')), (self.input_height, self.input_width, self.c_dim)) for x in self.data_X])
-      else:
-        raise Exception("[!] Unknown color dimension. Got argument 'c_dim'=%d" % self.c_dim)
-      
-      np.random.shuffle(self.data_X)
-      self.data_X = (self.data_X - 127.5) / 127.5  # Normalize the images to [-1, 1]
-      self.buffer_size = self.data_X.shape[0]
-      self.data_y = np.ones(self.data_X.shape[0])
-      self.data_X = tf.data.Dataset.from_tensor_slices(self.data_X).shuffle(self.buffer_size).batch(self.batch_size)
+      self.data_X, self.data_Y = self.load_custom_dataset()
       
     # self.grayscale = (self.c_dim == 1)
 
@@ -136,211 +141,246 @@ class DCGAN(object):
     self.z = tf.Variable(tf.zeros([None, self.z_dim]), dtype=tf.float32)
     self.z_sum = histogram_summary("z", self.z)
 
-    self.G = self.generator(self.z)
-    self.D, self.D_logits = self.discriminator(image_dims=image_dims,)
-    self.D_, self.D_logits_ = tf.keras.models.clone_model(self.D), tf.identity(self.D_logits)
+    self.generator_model = self.generator(self.z)
+    self.discriminator_model = self.discriminator(image_dims)
+    # self.discriminator_model, self.D_logits = self.discriminator(image_dims=image_dims,)
+    # self.discriminator_model_, self.D_logits_ = tf.keras.models.clone_model(self.discriminator_model), tf.identity(self.D_logits)
     
-    self.d_sum = histogram_summary("d", self.D)
-    self.d__sum = histogram_summary("d_", self.D_)
-    self.G_sum = image_summary("G", self.G)
+    # self.discriminator_model_summary = histogram_summary("d", self.discriminator_model)
+    # self.d_loss_real = tf.reduce_mean(
+    #   sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.discriminator_model)))
+    # self.d_loss_fake = tf.reduce_mean(
+    #   sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_)))
+    # self.g_loss = tf.reduce_mean(
+    #   sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_)))
+    self.cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
+    self.losses: ModelLosses = ModelLosses()
+    # self.d_loss_real = self.cross_entropy(self.D_logits, tf.ones_like(self.D_))
 
-    def sigmoid_cross_entropy_with_logits(x, y):
-      return tf.nn.sigmoid_cross_entropy_with_logits(logits=x, labels=y)
-
-    self.d_loss_real = tf.reduce_mean(
-      sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D)))
-    self.d_loss_fake = tf.reduce_mean(
-      sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_)))
-    self.g_loss = tf.reduce_mean(
-      sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_)))
-
-    self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
-    self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
+    self.d_optim = tf.keras.optimizers.Adam()# .minimize(self.d_loss, var_list=self.d_vars)
+    self.g_optim = tf.train.optimizers.Adam()# .minimize(self.g_loss, var_list=self.g_vars)
+    
+    
+    # self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
+    # self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
                           
-    self.d_loss = self.d_loss_real + self.d_loss_fake
+    # self.d_loss = self.d_loss_real + self.d_loss_fake
 
-    self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
-    self.d_loss_sum = scalar_summary("d_loss", self.d_loss)
+    # self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
+    # self.d_loss_sum = scalar_summary("d_loss", self.d_loss)
 
     # t_vars = tf.trainable_variables()
-    self.d_vars = self.D.trainable_variables()
-    self.g_vars = self.G.trainable_variables()
+    # self.d_vars = self.discriminator_model.trainable_variables()
+    # self.g_vars = self.generator_model.trainable_variables()
 
     # self.d_vars = [var for var in t_vars if 'd_' in var.name]
     # self.g_vars = [var for var in t_vars if 'g_' in var.name]
 
     # self.saver = tf.train.Saver(max_to_keep=self.max_to_keep)
+    self.checkpoint = tf.train.Checkpoint(g_optim=self.g_optim,
+                                          d_optim=self.d_optim,
+                                          generator_model=self.generator_model,
+                                          discriminator_model=self.discriminator_model)
 
   def train(self, config):
-    d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
-              .minimize(self.d_loss, var_list=self.d_vars)
-    g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
-              .minimize(self.g_loss, var_list=self.g_vars)
-    try:
-      tf.global_variables_initializer().run()
-    except:
-      tf.initialize_all_variables().run()
+    early_stop_count = 0
+    self.d_optim = tf.keras.optimizers.Adam(config.learning_rate, beta1=config.beta1)# .minimize(self.d_loss, var_list=self.d_vars)
+    self.g_optim = tf.train.optimizers.Adam(config.learning_rate, beta1=config.beta1)# .minimize(self.g_loss, var_list=self.g_vars)
+    # try:
+    #   tf.global_variables_initializer().run()
+    # except:
+    #   tf.initialize_all_variables().run()
 
-    if config.G_img_sum:
-      self.g_sum = merge_summary([self.z_sum, self.d__sum, self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
-    else:
-      self.g_sum = merge_summary([self.z_sum, self.d__sum, self.d_loss_fake_sum, self.g_loss_sum])
-    self.d_sum = merge_summary(
-        [self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
-    self.writer = SummaryWriter(os.path.join(self.out_dir, "logs"), self.tf_session.graph)
+    # if config.G_img_sum:
+    #   self.g_sum = merge_summary([self.z_sum, self.d__sum, self.generator_model_summary, self.d_loss_fake_sum, self.g_loss_sum])
+    # else:
+    #   self.g_sum = merge_summary([self.z_sum, self.d__sum, self.d_loss_fake_sum, self.g_loss_sum])
+    # self.discriminator_model_summary = merge_summary(
+    #     [self.z_sum, self.discriminator_model_summary, self.d_loss_real_sum, self.d_loss_sum])
+    # self.writer = SummaryWriter(os.path.join(self.out_dir, "logs"), self.tf_session.graph)
 
-    sample_z = gen_random(config.z_dist, size=(self.sample_num , self.z_dim))
-    
-    if config.dataset == 'mnist':
-      sample_inputs = self.data_X[0:self.sample_num]
-      sample_labels = self.data_y[0:self.sample_num]
-    else:
-      sample_files = self.data_X[0:self.sample_num]
-      sample = [
-          get_image(sample_file,
-                    input_height=self.input_height,
-                    input_width=self.input_width,
-                    resize_height=self.output_height,
-                    resize_width=self.output_width,
-                    crop=self.crop,
-                    grayscale=self.grayscale) for sample_file in sample_files]
-      if (self.grayscale):
-        sample_inputs = np.array(sample).astype(np.float32)[:, :, :, None]
-      else:
-        sample_inputs = np.array(sample).astype(np.float32)
+    sample_z = tf.random.normal([self.batch_size, self.z_dim])
+    # sample_z = gen_random(config.z_dist, size=(self.batch_size , self.z_dim))
+    # sample_inputs = self.data_X[0:self.batch_size]
+    # sample_inputs = next(iter(self.data_X))
+    # sample_labels = self.data_Y[0:self.batch_size]
+    self.num_of_batches = self.data_X[0] // self.batch_size
+    # if config.dataset == 'mnist':
+    #   sample_inputs = self.data_X[0:self.batch_size]
+    #   sample_labels = self.data_y[0:self.sample_num]
+    # else:
+    #   sample_files = self.data_X[0:self.sample_num]
+    #   sample = [
+    #       get_image(sample_file,
+    #                 input_height=self.input_height,
+    #                 input_width=self.input_width,
+    #                 resize_height=self.output_height,
+    #                 resize_width=self.output_width,
+    #                 crop=self.crop,
+    #                 grayscale=self.grayscale) for sample_file in sample_files]
+    #   if (self.grayscale):
+    #     sample_inputs = np.array(sample).astype(np.float32)[:, :, :, None]
+    #   else:
+    #     sample_inputs = np.array(sample).astype(np.float32)
   
-    counter = 1
+    # counter = 1
     start_time = time.time()
-    could_load, checkpoint_counter = self.load(self.checkpoint_dir)
-    if could_load:
-      counter = checkpoint_counter
-      print(" [*] Load SUCCESS")
-    else:
-      print(" [!] Load failed...")
+    # TODO resume training
+    # could_load, checkpoint_counter = self.load(self.checkpoint_dir)
+    # if could_load:
+    #   counter = checkpoint_counter
+    #   print(" [*] Load SUCCESS")
+    # else:
+    #   print(" [!] Load failed...")
+    with logging_redirect_tqdm():
+      minimum_loss = np.Inf
+      for epoch in trange(config.epoch):
+        # if config.dataset == 'mnist':
+        #   batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
+        # else:      
+        #   self.data_X = glob(os.path.join(
+        #     config.data_dir, config.dataset, self.input_fname_pattern))
+        #   np.random.shuffle(self.data_X)
+        #   batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
 
-    for epoch in xrange(config.epoch):
-      if config.dataset == 'mnist':
-        batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
-      else:      
-        self.data_X = glob(os.path.join(
-          config.data_dir, config.dataset, self.input_fname_pattern))
-        np.random.shuffle(self.data_X)
-        batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
+        for idx, batch_images in enumerate(self.data_X):
+          self.train_step(batch_images)
 
-      for idx in xrange(0, int(batch_idxs)):
-        if config.dataset == 'mnist':
-          batch_images = self.data_X[idx*config.batch_size:(idx+1)*config.batch_size]
-          batch_labels = self.data_y[idx*config.batch_size:(idx+1)*config.batch_size]
-        else:
-          batch_files = self.data_X[idx*config.batch_size:(idx+1)*config.batch_size]
-          batch = [
-              get_image(batch_file,
-                        input_height=self.input_height,
-                        input_width=self.input_width,
-                        resize_height=self.output_height,
-                        resize_width=self.output_width,
-                        crop=self.crop,
-                        grayscale=self.grayscale) for batch_file in batch_files]
-          if self.grayscale:
-            batch_images = np.array(batch).astype(np.float32)[:, :, :, None]
-          else:
-            batch_images = np.array(batch).astype(np.float32)
+          if np.mod(idx, config.sample_freq) == 0:
+            logging.info("[Epoch:[%2d/%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
+              % (epoch, config.epoch, idx, self.num_of_batches,
+                time.time() - start_time, self.losses.discriminator.epoch_loss[-1],\
+                   self.losses.generator.epoch_loss[-1]))
+            
 
-        batch_z = gen_random(config.z_dist, size=[config.batch_size, self.z_dim]) \
-              .astype(np.float32)
 
-        if config.dataset == 'mnist':
-          # Update D network
-          _, summary_str = self.tf_session.run([d_optim, self.d_sum],
-            feed_dict={ 
-              self.inputs: batch_images,
-              self.z: batch_z,
-              self.y:batch_labels,
-            })
-          self.writer.add_summary(summary_str, counter)
+        self.losses.generator.epoch_loss.append(np.mean(self.losses.generator.running_loss))
+        self.losses.discriminator.epoch_loss.append(np.mean(self.losses.discriminator.running_loss))
+        self.losses.generator.running_loss.clear()
+        self.losses.discriminator.running_loss.clear()
+        if np.mod(epoch, config.sample_freq) == 0:
+          self.generate_and_save_images(self.generator_model, epoch+1, sample_z)
 
-          # Update G network
-          _, summary_str = self.tf_session.run([g_optim, self.g_sum],
-            feed_dict={
-              self.z: batch_z, 
-              self.y:batch_labels,
-            })
-          self.writer.add_summary(summary_str, counter)
+          # if config.dataset == 'mnist':
+          #   batch_images = self.data_X[idx*config.batch_size:(idx+1)*config.batch_size]
+          #   batch_labels = self.data_Y[idx*config.batch_size:(idx+1)*config.batch_size]
+          # else:
+          #   batch_files = self.data_X[idx*config.batch_size:(idx+1)*config.batch_size]
+          #   batch = [
+          #       get_image(batch_file,
+          #                 input_height=self.input_height,
+          #                 input_width=self.input_width,
+          #                 resize_height=self.output_height,
+          #                 resize_width=self.output_width,
+          #                 crop=self.crop,
+          #                 grayscale=self.grayscale) for batch_file in batch_files]
+          #   if self.grayscale:
+          #     batch_images = np.array(batch).astype(np.float32)[:, :, :, None]
+          #   else:
+          #     batch_images = np.array(batch).astype(np.float32)
 
-          # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-          _, summary_str = self.tf_session.run([g_optim, self.g_sum],
-            feed_dict={ self.z: batch_z, self.y:batch_labels })
-          self.writer.add_summary(summary_str, counter)
+          # batch_z = gen_random(config.z_dist, size=[config.batch_size, self.z_dim]).astype(np.float32)
+
+          # if config.dataset == 'mnist':
+            # # Update D network
+            # _, summary_str = self.tf_session.run([d_optim, self.discriminator_model_summary],
+            #   feed_dict={ 
+            #     self.inputs: batch_images,
+            #     self.z: batch_z,
+            #     self.y:batch_labels,
+            #   })
+            # self.writer.add_summary(summary_str, counter)
+
+            # # Update G network
+            # _, summary_str = self.tf_session.run([g_optim, self.g_sum],
+            #   feed_dict={
+            #     self.z: batch_z, 
+            #     self.y:batch_labels,
+            #   })
+            # self.writer.add_summary(summary_str, counter)
+
+            # # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
+            # _, summary_str = self.tf_session.run([g_optim, self.g_sum],
+            #   feed_dict={ self.z: batch_z, self.y:batch_labels })
+            # self.writer.add_summary(summary_str, counter)
+            
+            # errD_fake = self.d_loss_fake.eval({
+            #     self.z: batch_z, 
+            #     self.y:batch_labels
+            # })
+            # errD_real = self.d_loss_real.eval({
+            #     self.inputs: batch_images,
+            #     self.y:batch_labels
+            # })
+            # errG = self.g_loss.eval({
+            #     self.z: batch_z,
+            #     self.y: batch_labels
+            # })
+          # else:
+          #   # Update D network
+          #   _, summary_str = self.tf_session.run([d_optim, self.discriminator_model_summary],
+          #     feed_dict={ self.inputs: batch_images, self.z: batch_z })
+          #   self.writer.add_summary(summary_str, counter)
+
+          #   # Update G network
+          #   _, summary_str = self.tf_session.run([g_optim, self.g_sum],
+          #     feed_dict={ self.z: batch_z })
+          #   self.writer.add_summary(summary_str, counter)
+
+          #   # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
+          #   _, summary_str = self.tf_session.run([g_optim, self.g_sum],
+          #     feed_dict={ self.z: batch_z })
+          #   self.writer.add_summary(summary_str, counter)
+            
+          #   errD_fake = self.d_loss_fake.eval({ self.z: batch_z })
+          #   errD_real = self.d_loss_real.eval({ self.inputs: batch_images })
+          #   errG = self.g_loss.eval({self.z: batch_z})
+
+          # if np.mod(counter, config.sample_freq) == 0:
+          #   if config.dataset == 'mnist':
+          #     samples, d_loss, g_loss = self.tf_session.run(
+          #       [self.sampler, self.d_loss, self.g_loss],
+          #       feed_dict={
+          #           self.z: sample_z,
+          #           self.inputs: sample_inputs,
+          #           self.y:sample_labels,
+          #       }
+          #     )
+          #     save_images(samples, image_manifold_size(samples.shape[0]),
+          #           './{}/train_{:08d}.png'.format(config.sample_dir, counter))
+          #     print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
+          #   else:
+          #     try:
+          #       samples, d_loss, g_loss = self.tf_session.run(
+          #         [self.sampler, self.d_loss, self.g_loss],
+          #         feed_dict={
+          #             self.z: sample_z,
+          #             self.inputs: sample_inputs,
+          #         },
+          #       )
+          #       save_images(samples, image_manifold_size(samples.shape[0]),
+          #             './{}/train_{:08d}.png'.format(config.sample_dir, counter))
+          #       print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
+          #     except:
+          #       print("one pic error!...")
+
+        if np.mod(epoch, config.ckpt_freq) == 0:
+          if os.listdir(self.checkpoint_dir) > self.max_to_keep:
+            old_ckpt = sorted(os.listdir(self.checkpoint_dir))[-1]
+            os.remove(os.path.join(self.checkpoint_dir, old_ckpt))
+          self.checkpoint.save(file_prefix = self.checkpoint_dir)
           
-          errD_fake = self.d_loss_fake.eval({
-              self.z: batch_z, 
-              self.y:batch_labels
-          })
-          errD_real = self.d_loss_real.eval({
-              self.inputs: batch_images,
-              self.y:batch_labels
-          })
-          errG = self.g_loss.eval({
-              self.z: batch_z,
-              self.y: batch_labels
-          })
-        else:
-          # Update D network
-          _, summary_str = self.tf_session.run([d_optim, self.d_sum],
-            feed_dict={ self.inputs: batch_images, self.z: batch_z })
-          self.writer.add_summary(summary_str, counter)
-
-          # Update G network
-          _, summary_str = self.tf_session.run([g_optim, self.g_sum],
-            feed_dict={ self.z: batch_z })
-          self.writer.add_summary(summary_str, counter)
-
-          # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-          _, summary_str = self.tf_session.run([g_optim, self.g_sum],
-            feed_dict={ self.z: batch_z })
-          self.writer.add_summary(summary_str, counter)
+        if self.losses.generator.epoch_loss[-1] < minimum_loss:
+          if (epoch-early_stop_count) > self.early_stop_count:
+            logging.warning("QUIT TRAINING - Early stopping count reached. %d", self.early_stop_count)
+            break
+          early_stop_count=idx
+          minimum_loss = self.losses.generator.epoch_loss[-1]
+          tf.saved_model.save(self.generator_model, self.checkpoint_best_gen)
+          tf.saved_model.save(self.discriminator_model, self.checkpoint_best_dis)
           
-          errD_fake = self.d_loss_fake.eval({ self.z: batch_z })
-          errD_real = self.d_loss_real.eval({ self.inputs: batch_images })
-          errG = self.g_loss.eval({self.z: batch_z})
 
-        print("[%8d Epoch:[%2d/%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
-          % (counter, epoch, config.epoch, idx, batch_idxs,
-            time.time() - start_time, errD_fake+errD_real, errG))
-
-        if np.mod(counter, config.sample_freq) == 0:
-          if config.dataset == 'mnist':
-            samples, d_loss, g_loss = self.tf_session.run(
-              [self.sampler, self.d_loss, self.g_loss],
-              feed_dict={
-                  self.z: sample_z,
-                  self.inputs: sample_inputs,
-                  self.y:sample_labels,
-              }
-            )
-            save_images(samples, image_manifold_size(samples.shape[0]),
-                  './{}/train_{:08d}.png'.format(config.sample_dir, counter))
-            print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
-          else:
-            try:
-              samples, d_loss, g_loss = self.tf_session.run(
-                [self.sampler, self.d_loss, self.g_loss],
-                feed_dict={
-                    self.z: sample_z,
-                    self.inputs: sample_inputs,
-                },
-              )
-              save_images(samples, image_manifold_size(samples.shape[0]),
-                    './{}/train_{:08d}.png'.format(config.sample_dir, counter))
-              print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
-            except:
-              print("one pic error!...")
-
-        if np.mod(counter, config.ckpt_freq) == 0:
-          self.save(config.checkpoint_dir, counter)
-        
-        counter += 1
-        
+          
   def discriminator_v1(self, image, y=None, reuse=False):
     with tf.variable_scope("discriminator") as scope:
       if reuse:
@@ -400,7 +440,8 @@ class DCGAN(object):
                                     bias_initializer=tf.keras.initializers.Constant(value=0),))
     h4_logits = model.get_layer()
     model.add(tf.keras.layers.Activation(tf.nn.sigmoid))
-    return model, h4_logits
+    # return model, h4_logits
+    return model
 
 
   def generator_v1(self, z_data, y_data=None):
@@ -556,9 +597,111 @@ class DCGAN(object):
     self.buffer_size = train_images.shape[0]
     test_dataset = np.ones(train_dataset.shape[0])
     train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(self.buffer_size).batch(self.batch_size)
+    test_dataset = tf.data.Dataset.from_tensor_slices(test_dataset).shuffle(self.buffer_size).batch(self.batch_size)
     return train_dataset, test_dataset
+  def load_custom_dataset(self):
+    data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
+    logging.info("loading custom data from %s." % data_path)
+    if self.c_dim is None:
+      raise ValueError("with custom data, c-dim argument is required. 1 if your data is grayscale or 3 if your dataset is RGB images")
+    logging.warning("Please make sure all images are either RGB (3 channels) or grayscale (1 channels). Got argument 'c_dim'=%d" % self.c_dim)
+    path_to_images = glob(data_path)
+    if len(path_to_images) == 0: raise Exception("[!] No data found in '" + data_path + "'")
+    if len(path_to_images) < self.batch_size: raise Exception("[!] Entire dataset size is less than the configured batch_size")
+      
+    if self.c_dim==1:
+      data_X_np = np.stack([transform(np.array(Image.open(x).convert('L')),\
+                                        self.input_height, self.input_width,\
+                                        self.output_height, self.output_width, self.crop)\
+                                        for x in path_to_images])
+    elif self.c_dim==3:
+      data_X_np = np.stack([transform(np.array(Image.open(x).convert('RGB')),\
+                                        self.input_height, self.input_width,\
+                                        self.output_height, self.output_width, self.crop)\
+                                        for x in path_to_images])
+    else:
+      raise Exception("[!] Unknown color dimension. Got argument 'c_dim'=%d" % self.c_dim)
+    
+    self.buffer_size = data_X_np.shape[0]
+    train_dataset_y = tf.data.Dataset.from_tensor_slices(np.ones(data_X_np.shape[0])).shuffle(self.buffer_size).batch(self.batch_size)
+    train_dataset_x = tf.data.Dataset.from_tensor_slices(data_X_np).shuffle(self.buffer_size).batch(self.batch_size)
+    return train_dataset_x, train_dataset_y
 
 
+  def generator_loss(self, fake_output):
+    total_loss = self.cross_entropy(tf.ones_like(fake_output), fake_output)
+    # TODO instead of logits or complex structure, store actual value only
+    self.losses.generator.running_loss.append(total_loss) 
+    return total_loss
+  def discriminator_loss(self, real_output, fake_output):
+    real_loss = self.cross_entropy(tf.ones_like(real_output), real_output)
+    fake_loss = self.cross_entropy(tf.zeros_like(fake_output), fake_output)
+    total_loss = real_loss + fake_loss
+    # TODO instead of logits or complex structure, store actual value only
+    self.losses.discriminator.running_loss.append(total_loss)
+    return total_loss
+  
+
+  @tf.function
+  def train_step(self, images):
+    noise = tf.random.normal([self.batch_size, self.z_dim])
+
+    with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
+      generated_images = self.generator_model(noise, training=True)
+
+      real_output = self.discriminator_model(images, training=True)
+      fake_output = self.discriminator_model(generated_images, training=True)
+
+      gen_loss = self.generator_loss(fake_output)
+      disc_loss = self.discriminator_loss(real_output, fake_output)
+
+    # updating generator twice a step - as done in original repo
+    gradients_of_generator = gen_tape.gradient(gen_loss, self.generator_model.trainable_variables)
+    self.g_optim.apply_gradients(zip(gradients_of_generator, self.generator_model.trainable_variables))
+    gradients_of_generator = gen_tape.gradient(gen_loss, self.generator_model.trainable_variables)
+    self.g_optim.apply_gradients(zip(gradients_of_generator, self.generator_model.trainable_variables))
+
+    gradients_of_discriminator = disc_tape.gradient(disc_loss, self.discriminator_model.trainable_variables)
+    self.d_optim.apply_gradients(zip(gradients_of_discriminator, self.discriminator_model.trainable_variables))
+
+
+  def generate_and_save_images(self, model, epoch, test_input,):
+    predictions = model(test_input, training=False)
+
+    fig = plt.figure(figsize=(4, 4))
+    if self.c_dim == 1:
+      cmap_ = "gray"
+    else:
+      cmap_ = "RGB"
+    for i in range(predictions.shape[0]):
+        plt.subplot(4, 4, i+1)
+        plt.imshow(predictions[i, :, :, 0] * 127.5 + 127.5, cmap=cmap_)
+        plt.axis('off')
+
+    plt.savefig(os.path.join(self.sample_dir, f'image_at_{epoch}.png'))
+    plt.show()
+
+    if self.train:
+      fig = plt.figure(figsize=(4, 4))
+      plt.plot(self.losses.discriminator.epoch_loss, label="Discriminator Loss", linewidth=2, marker="*")
+      plt.plot(self.losses.generator.epoch_loss, label="Generator Loss", linewidth=2, marker="*")
+      plt.savefig(os.path.join(self.sample_dir, "losses.png"))
+
+  def load_and_generate_images(self, args):
+    logging.info(" [*] Reading checkpoints... %s" % args.checkpoint_dir)
+    try:
+      imported = tf.saved_model.load(args.checkpoint_dir)
+      self.generator_model = imported.signature["serving_default"]
+      
+      z = tf.random.normal([args.generate_test_images, self.z_dim])
+      self.generate_and_save_images(self.generator_model, "test", z)
+      return True
+    except Exception as e:
+      logging.info(" [*] Failed to find checkpoint")
+      logging.info(e)
+      return False
+  
+  
   # def sampler(self, z, y=None):
   #   with tf.variable_scope("generator") as scope:
   #     scope.reuse_variables()
@@ -639,20 +782,32 @@ class DCGAN(object):
   #             '{}-{:06d}_frz.pb'.format(filename, step),
   #             as_text=False)
 
-  # def load(self, checkpoint_dir):
+  # def load_and_generate_images(self, args):
   #   #import re
-  #   print(" [*] Reading checkpoints...", checkpoint_dir)
-  #   # checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
-  #   # print("     ->", checkpoint_dir)
+  #   logging.info(" [*] Reading checkpoints... %s" % args.checkpoint_dir)
+  #   try:
+  #     imported = tf.saved_model.load(args.checkpoint_dir)
+  #     self.generator_model = imported.signature["serving_default"]
+      
+  #     z = tf.random.normal([args.generate_test_images, self.z_dim])
+  #     self.generate_and_save_images(self.generator_model, "test", z)
+  #     return True
+  #   except Exception as e:
+  #     logging.info(" [*] Failed to find checkpoint")
+  #     logging.info(e)
+  #     return False
 
-  #   ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
-  #   if ckpt and ckpt.model_checkpoint_path:
-  #     ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-  #     self.saver.restore(self.tf_session, os.path.join(checkpoint_dir, ckpt_name))
-  #     #counter = int(next(re.finditer("(\d+)(?!.*\d)",ckpt_name)).group(0))
-  #     counter = int(ckpt_name.split('-')[-1])
-  #     print(" [*] Success to read {}".format(ckpt_name))
-  #     return True, counter
-  #   else:
-  #     print(" [*] Failed to find a checkpoint")
-  #     return False, 0
+      
+
+
+    # ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+    # if ckpt and ckpt.model_checkpoint_path:
+    #   ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+    #   self.saver.restore(self.tf_session, os.path.join(checkpoint_dir, ckpt_name))
+    #   #counter = int(next(re.finditer("(\d+)(?!.*\d)",ckpt_name)).group(0))
+    #   counter = int(ckpt_name.split('-')[-1])
+    #   print(" [*] Success to read {}".format(ckpt_name))
+    #   return True, counter
+    # else:
+    #   print(" [*] Failed to find a checkpoint")
+    #   return False, 0

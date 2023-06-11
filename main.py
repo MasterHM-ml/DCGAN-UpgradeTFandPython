@@ -43,9 +43,9 @@ parser.add_argument("--generate-test-images", type=int, default=100, help="Numbe
 
 
 args = parser.parse_args()
+logging.info(args)
 
-def main(_):
-  pp.pprint(args)
+def main(args):
   
   # expand user name and environment variables
   args.data_dir = expand_path(args.data_dir)
@@ -72,7 +72,7 @@ def main(_):
   if not os.path.exists(args.sample_dir): os.makedirs(args.sample_dir)
 
   with open(os.path.join(args.out_dir, 'arguments.json'), 'w') as f:
-    arguments_dict = {k:args[k].value for k in args}
+    arguments_dict = vars(args)
     json.dump(arguments_dict, f, indent=4, sort_keys=True, ensure_ascii=False)
   
 
@@ -149,4 +149,5 @@ def main(_):
         visualize(tf_session, dcgan, args, OPTION, args.sample_dir)
 
 if __name__ == '__main__':
-  tf.app.run()
+  # tf.app.run()
+  main(args)

@@ -3,8 +3,11 @@ from __future__ import print_function
 import os
 import time
 import math
+import logging
+
 from glob import glob
 import tensorflow as tf
+from tensorflow.keras import layers  # pyright: ignore
 import numpy as np
 from six.moves import xrange # pyright: ignore
 
@@ -40,11 +43,11 @@ class DCGAN(object):
       dfc_dim: (optional) Dimension of discriminator units for fully connected layer. [1024]
       c_dim: (optional) Dimension of image color. For grayscale input, set to 1. [3]
     """
-    self.tf_session = tf_session
+    # self.tf_session = tf_session
     self.crop = crop
 
     self.batch_size = batch_size
-    self.sample_num = sample_num
+    # self.sample_num = sample_num
 
     self.input_height = input_height
     self.input_width = input_width
@@ -60,19 +63,19 @@ class DCGAN(object):
     self.gfc_dim = gfc_dim
     self.dfc_dim = dfc_dim
 
-    # batch normalization : deals with poor initialization helps gradient flow
-    self.d_bn1 = batch_norm(name='d_bn1')
-    self.d_bn2 = batch_norm(name='d_bn2')
+    # # batch normalization : deals with poor initialization helps gradient flow
+    # self.d_bn1 = batch_norm(name='d_bn1')
+    # self.d_bn2 = batch_norm(name='d_bn2')
 
-    if not self.y_dim:
-      self.d_bn3 = batch_norm(name='d_bn3')
+    # if not self.y_dim:
+    #   self.d_bn3 = batch_norm(name='d_bn3')
 
-    self.g_bn0 = batch_norm(name='g_bn0')
-    self.g_bn1 = batch_norm(name='g_bn1')
-    self.g_bn2 = batch_norm(name='g_bn2')
+    # self.g_bn0 = batch_norm(name='g_bn0')
+    # self.g_bn1 = batch_norm(name='g_bn1')
+    # self.g_bn2 = batch_norm(name='g_bn2')
 
-    if not self.y_dim:
-      self.g_bn3 = batch_norm(name='g_bn3')
+    # if not self.y_dim:
+    #   self.g_bn3 = batch_norm(name='g_bn3')
 
     self.dataset_name = dataset_name
     self.input_fname_pattern = input_fname_pattern
@@ -81,62 +84,68 @@ class DCGAN(object):
     self.out_dir = out_dir
     self.max_to_keep = max_to_keep
 
-    if self.dataset_name == 'mnist':
-      self.data_X, self.data_y = self.load_mnist()
+    if self.dataset_name in ["mnist", "fashion_mnist", "cifar10", "cifar100"]:
+      self.data_X, self.data_y = self.load_builtin_dataset()
       self.c_dim = self.data_X[0].shape[-1]
     else:
       data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
-      self.data = glob(data_path)
-      if len(self.data) == 0:
-        raise Exception("[!] No data found in '" + data_path + "'")
-      np.random.shuffle(self.data)
-      imreadImg = imread(self.data[0])
-      if len(imreadImg.shape) >= 3: #check if image is a non-grayscale image by checking channel number
-        self.c_dim = imread(self.data[0]).shape[-1]
+      logging.info("loading custom data from %s." % data_path)
+      logging.info("Please make sure all images are either RGB (3 channels) or grayscale (1 channels). Got argument 'c_dim'=%d" % self.c_dim)
+      self.data_X = glob(data_path)
+      if len(self.data_X) == 0: raise Exception("[!] No data found in '" + data_path + "'")
+      if len(self.data_X) < self.batch_size: raise Exception("[!] Entire dataset size is less than the configured batch_size")
+        
+      if self.c_dim==1:
+        self.data_X = np.stack([np.reshape(np.array(Image.open(x).convert('L')), (self.input_height, self.input_width)) for x in self.data_X])
+      elif self.c_dim==3:
+        self.data_X = np.stack([np.reshape(np.array(Image.open(x).convert('RGB')), (self.input_height, self.input_width, self.c_dim)) for x in self.data_X])
       else:
-        self.c_dim = 1
-
-      if len(self.data) < self.batch_size:
-        raise Exception("[!] Entire dataset size is less than the configured batch_size")
-    
-    self.grayscale = (self.c_dim == 1)
+        raise Exception("[!] Unknown color dimension. Got argument 'c_dim'=%d" % self.c_dim)
+      
+      np.random.shuffle(self.data_X)
+      self.data_X = (self.data_X - 127.5) / 127.5  # Normalize the images to [-1, 1]
+      self.buffer_size = self.data_X.shape[0]
+      self.data_y = np.ones(self.data_X.shape[0])
+      self.data_X = tf.data.Dataset.from_tensor_slices(self.data_X).shuffle(self.buffer_size).batch(self.batch_size)
+      
+    # self.grayscale = (self.c_dim == 1)
 
     self.build_model()
 
   def build_model(self):
-    if self.y_dim:
-      self.y = tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
-    else:
-      self.y = None
+    # if self.y_dim:
+    #   # self.y = tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
+    #   self.y = tf.Variable(tf.zeros([self.batch_size, self.y_dim]), dtype=tf.float32)
+    # else:
+    #   self.y = None
 
     if self.crop:
       image_dims = [self.output_height, self.output_width, self.c_dim]
     else:
       image_dims = [self.input_height, self.input_width, self.c_dim]
 
-    self.inputs = tf.placeholder(
-      tf.float32, [self.batch_size] + image_dims, name='real_images')
+    # self.inputs = tf.placeholder(
+    #   tf.float32, [self.batch_size] + image_dims, name='real_images')
+    # self.inputs = tf.Variable(tf.zeros([self.batch_size]+image_dims), dtype=tf.floats32) # SYNTAX ERROR
+    # self.inputs = tf.Variable(tf.zeros([self.batch_size]+image_dims), dtype=tf.float32)
 
-    inputs = self.inputs
+    # inputs = self.inputs
 
-    self.z = tf.placeholder(
-      tf.float32, [None, self.z_dim], name='z')
+    # self.z = tf.placeholder(
+    #   tf.float32, [None, self.z_dim], name='z')
+    self.z = tf.Variable(tf.zeros([None, self.z_dim]), dtype=tf.float32)
     self.z_sum = histogram_summary("z", self.z)
 
-    self.G                  = self.generator(self.z, self.y)
-    self.D, self.D_logits   = self.discriminator(inputs, self.y, reuse=False)
-    self.sampler            = self.sampler(self.z, self.y)
-    self.D_, self.D_logits_ = self.discriminator(self.G, self.y, reuse=True)
+    self.G = self.generator(self.z)
+    self.D, self.D_logits = self.discriminator(image_dims=image_dims,)
+    self.D_, self.D_logits_ = tf.keras.models.clone_model(self.D), tf.identity(self.D_logits)
     
     self.d_sum = histogram_summary("d", self.D)
     self.d__sum = histogram_summary("d_", self.D_)
     self.G_sum = image_summary("G", self.G)
 
     def sigmoid_cross_entropy_with_logits(x, y):
-      try:
-        return tf.nn.sigmoid_cross_entropy_with_logits(logits=x, labels=y)
-      except:
-        return tf.nn.sigmoid_cross_entropy_with_logits(logits=x, targets=y)
+      return tf.nn.sigmoid_cross_entropy_with_logits(logits=x, labels=y)
 
     self.d_loss_real = tf.reduce_mean(
       sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D)))
@@ -153,12 +162,14 @@ class DCGAN(object):
     self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
     self.d_loss_sum = scalar_summary("d_loss", self.d_loss)
 
-    t_vars = tf.trainable_variables()
+    # t_vars = tf.trainable_variables()
+    self.d_vars = self.D.trainable_variables()
+    self.g_vars = self.G.trainable_variables()
 
-    self.d_vars = [var for var in t_vars if 'd_' in var.name]
-    self.g_vars = [var for var in t_vars if 'g_' in var.name]
+    # self.d_vars = [var for var in t_vars if 'd_' in var.name]
+    # self.g_vars = [var for var in t_vars if 'g_' in var.name]
 
-    self.saver = tf.train.Saver(max_to_keep=self.max_to_keep)
+    # self.saver = tf.train.Saver(max_to_keep=self.max_to_keep)
 
   def train(self, config):
     d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
@@ -184,7 +195,7 @@ class DCGAN(object):
       sample_inputs = self.data_X[0:self.sample_num]
       sample_labels = self.data_y[0:self.sample_num]
     else:
-      sample_files = self.data[0:self.sample_num]
+      sample_files = self.data_X[0:self.sample_num]
       sample = [
           get_image(sample_file,
                     input_height=self.input_height,
@@ -211,17 +222,17 @@ class DCGAN(object):
       if config.dataset == 'mnist':
         batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
       else:      
-        self.data = glob(os.path.join(
+        self.data_X = glob(os.path.join(
           config.data_dir, config.dataset, self.input_fname_pattern))
-        np.random.shuffle(self.data)
-        batch_idxs = min(len(self.data), config.train_size) // config.batch_size
+        np.random.shuffle(self.data_X)
+        batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
 
       for idx in xrange(0, int(batch_idxs)):
         if config.dataset == 'mnist':
           batch_images = self.data_X[idx*config.batch_size:(idx+1)*config.batch_size]
           batch_labels = self.data_y[idx*config.batch_size:(idx+1)*config.batch_size]
         else:
-          batch_files = self.data[idx*config.batch_size:(idx+1)*config.batch_size]
+          batch_files = self.data_X[idx*config.batch_size:(idx+1)*config.batch_size]
           batch = [
               get_image(batch_file,
                         input_height=self.input_height,
@@ -330,7 +341,7 @@ class DCGAN(object):
         
         counter += 1
         
-  def discriminator(self, image, y=None, reuse=False):
+  def discriminator_v1(self, image, y=None, reuse=False):
     with tf.variable_scope("discriminator") as scope:
       if reuse:
         scope.reuse_variables()
@@ -360,8 +371,39 @@ class DCGAN(object):
         h3 = linear(h2, 1, 'd_h3_lin')
         
         return tf.nn.sigmoid(h3), h3
+  def discriminator(self, image_dims,):
+    model = tf.keras.Sequential()
+    model.add(tf.keras.layers.Conv2D(self.df_dim, (5,5), (2,2), "same", use_bias=True, input_shape=image_dims,
+                                     kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.02, seed=None),
+                                     bias_initializer=tf.keras.initializers.Constant(value=0),))
+    model.add(tf.keras.layers.LeakyReLU())
+    # model.add(tf.keras.layers.Dropout(0.3)) - repo not doing this, but paper do this
 
-  def generator(self, z, y=None):
+    model.add(tf.keras.layers.Conv2D(self.df_dim*2, (5,5), (2,2,), "same", use_bias=True,
+                                     kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.02, seed=None),
+                                     bias_initializer=tf.keras.initializers.Constant(value=0),))
+    model.add(tf.keras.layers.LeakyReLU())
+
+    model.add(tf.keras.layers.Conv2D(self.df_dim*4, (5,5), (2,2,), "same", use_bias=True,
+                                     kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.02, seed=None),
+                                     bias_initializer=tf.keras.initializers.Constant(value=0),))
+    model.add(tf.keras.layers.LeakyReLU())
+
+    model.add(tf.keras.layers.Conv2D(self.df_dim*8, (5,5), (2,2,), "same", use_bias=True,
+                                     kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.02, seed=None),
+                                     bias_initializer=tf.keras.initializers.Constant(value=0),))
+    model.add(tf.keras.layers.LeakyReLU())
+
+    model.add(tf.keras.layers.Flatten())
+    model.add(tf.keras.layers.Dense(1, use_bias=True, name="h4",
+                                    kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02, seed=None),
+                                    bias_initializer=tf.keras.initializers.Constant(value=0),))
+    h4_logits = model.get_layer()
+    model.add(tf.keras.layers.Activation(tf.nn.sigmoid))
+    return model, h4_logits
+
+
+  def generator_v1(self, z_data, y_data=None):
     with tf.variable_scope("generator") as scope:
       if not self.y_dim:
         s_h, s_w = self.output_height, self.output_width
@@ -372,7 +414,7 @@ class DCGAN(object):
 
         # project `z` and reshape
         self.z_, self.h0_w, self.h0_b = linear(
-            z, self.gf_dim*8*s_h16*s_w16, 'g_h0_lin', with_w=True)
+            z_data, self.gf_dim*8*s_h16*s_w16, 'g_h0_lin', with_w=True)
 
         self.h0 = tf.reshape(
             self.z_, [-1, s_h16, s_w16, self.gf_dim * 8])
@@ -400,12 +442,12 @@ class DCGAN(object):
         s_w2, s_w4 = int(s_w/2), int(s_w/4)
 
         # yb = tf.expand_dims(tf.expand_dims(y, 1),2)
-        yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
-        z = concat([z, y], 1)
+        yb = tf.reshape(y_data, [self.batch_size, 1, 1, self.y_dim])
+        z_data = concat([z_data, y_data], 1) # LOGICAL ERROR - z_data and y_data must have same dimensions sizes except axis
 
         h0 = tf.nn.relu(
-            self.g_bn0(linear(z, self.gfc_dim, 'g_h0_lin')))
-        h0 = concat([h0, y], 1)
+            self.g_bn0(linear(z_data, self.gfc_dim, 'g_h0_lin')))
+        h0 = concat([h0, y_data], 1)
 
         h1 = tf.nn.relu(self.g_bn1(
             linear(h0, self.gf_dim*2*s_h4*s_w4, 'g_h1_lin')))
@@ -419,136 +461,198 @@ class DCGAN(object):
 
         return tf.nn.sigmoid(
             deconv2d(h2, [self.batch_size, s_h, s_w, self.c_dim], name='g_h3'))
+  def generator(self, z,):
+    # if not self.y_dim:
+    s_h, s_w = self.output_height, self.output_width
+    s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
+    s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
+    s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
+    s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
 
-  def sampler(self, z, y=None):
-    with tf.variable_scope("generator") as scope:
-      scope.reuse_variables()
-
-      if not self.y_dim:
-        s_h, s_w = self.output_height, self.output_width
-        s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
-        s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
-        s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
-        s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
-
-        # project `z` and reshape
-        h0 = tf.reshape(
-            linear(z, self.gf_dim*8*s_h16*s_w16, 'g_h0_lin'),
-            [-1, s_h16, s_w16, self.gf_dim * 8])
-        h0 = tf.nn.relu(self.g_bn0(h0, train=False))
-
-        h1 = deconv2d(h0, [self.batch_size, s_h8, s_w8, self.gf_dim*4], name='g_h1')
-        h1 = tf.nn.relu(self.g_bn1(h1, train=False))
-
-        h2 = deconv2d(h1, [self.batch_size, s_h4, s_w4, self.gf_dim*2], name='g_h2')
-        h2 = tf.nn.relu(self.g_bn2(h2, train=False))
-
-        h3 = deconv2d(h2, [self.batch_size, s_h2, s_w2, self.gf_dim*1], name='g_h3')
-        h3 = tf.nn.relu(self.g_bn3(h3, train=False))
-
-        h4 = deconv2d(h3, [self.batch_size, s_h, s_w, self.c_dim], name='g_h4')
-
-        return tf.nn.tanh(h4)
-      else:
-        s_h, s_w = self.output_height, self.output_width
-        s_h2, s_h4 = int(s_h/2), int(s_h/4)
-        s_w2, s_w4 = int(s_w/2), int(s_w/4)
-
-        # yb = tf.reshape(y, [-1, 1, 1, self.y_dim])
-        yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
-        z = concat([z, y], 1)
-
-        h0 = tf.nn.relu(self.g_bn0(linear(z, self.gfc_dim, 'g_h0_lin'), train=False))
-        h0 = concat([h0, y], 1)
-
-        h1 = tf.nn.relu(self.g_bn1(
-            linear(h0, self.gf_dim*2*s_h4*s_w4, 'g_h1_lin'), train=False))
-        h1 = tf.reshape(h1, [self.batch_size, s_h4, s_w4, self.gf_dim * 2])
-        h1 = conv_cond_concat(h1, yb)
-
-        h2 = tf.nn.relu(self.g_bn2(
-            deconv2d(h1, [self.batch_size, s_h2, s_w2, self.gf_dim * 2], name='g_h2'), train=False))
-        h2 = conv_cond_concat(h2, yb)
-
-        return tf.nn.sigmoid(deconv2d(h2, [self.batch_size, s_h, s_w, self.c_dim], name='g_h3'))
-
-  def load_mnist(self):
-    data_dir = os.path.join(self.data_dir, self.dataset_name)
+    model = tf.keras.Sequential()
     
-    fd = open(os.path.join(data_dir,'train-images-idx3-ubyte'))
-    loaded = np.fromfile(file=fd,dtype=np.uint8)
-    trX = loaded[16:].reshape((60000,28,28,1)).astype(np.float)
+    model.add(layers.Dense(self.gf_dim*8*s_h16*s_w16, use_bias=True, input_shape=z.get_shape()[1],
+                           kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02, seed=None),
+                           bias_initializer=tf.keras.initializers.Constant(value=0),))
+    model.add(layers.BatchNormalization())
+    model.add(tf.keras.layers.ReLU())
 
-    fd = open(os.path.join(data_dir,'train-labels-idx1-ubyte'))
-    loaded = np.fromfile(file=fd,dtype=np.uint8)
-    trY = loaded[8:].reshape((60000)).astype(np.float)
+    model.add(layers.Reshape((s_h16, s_w16, self.gf_dim * 8)))
+    assert model.output_shape == (None, s_h16, s_w16, self.gf_dim * 8)  # Note: None is the batch size
 
-    fd = open(os.path.join(data_dir,'t10k-images-idx3-ubyte'))
-    loaded = np.fromfile(file=fd,dtype=np.uint8)
-    teX = loaded[16:].reshape((10000,28,28,1)).astype(np.float)
+    model.add(layers.Conv2DTranspose(self.gf_dim*4, (5, 5), strides=(2, 2), padding='same', use_bias=True,
+                                     kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02, seed=None),
+                                     bias_initializer=tf.keras.initializers.Constant(value=0),))
+    assert model.output_shape == (None, s_h8, s_w8, self.gf_dim*4)
+    model.add(layers.BatchNormalization())
+    model.add(layers.ReLU())
 
-    fd = open(os.path.join(data_dir,'t10k-labels-idx1-ubyte'))
-    loaded = np.fromfile(file=fd,dtype=np.uint8)
-    teY = loaded[8:].reshape((10000)).astype(np.float)
+    model.add(layers.Conv2DTranspose(self.gf_dim*2, (5, 5), strides=(2, 2), padding='same', use_bias=True,
+                                     kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02, seed=None),
+                                     bias_initializer=tf.keras.initializers.Constant(value=0),))
+    assert model.output_shape == (None, s_h4, s_w4, self.gf_dim*2)
+    model.add(layers.BatchNormalization())
+    model.add(layers.ReLU())
 
-    trY = np.asarray(trY)
-    teY = np.asarray(teY)
+    model.add(layers.Conv2DTranspose(self.gf_dim, (5, 5), strides=(2, 2), padding='same', use_bias=True,
+                                     kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02, seed=None),
+                                     bias_initializer=tf.keras.initializers.Constant(value=0),))
+    assert model.output_shape == (None, s_h2, s_w2, self.gf_dim)
+    model.add(layers.BatchNormalization())
+    model.add(layers.LeakyReLU())
+
+    model.add(layers.Conv2DTranspose(self.c_dim, (5, 5), strides=(2, 2), padding='same', use_bias=True, activation='tanh',
+                                     kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02, seed=None),
+                                     bias_initializer=tf.keras.initializers.Constant(value=0),))
+    assert model.output_shape == (None, s_h, s_w, self.c_dim)
+
+    return model
     
-    X = np.concatenate((trX, teX), axis=0)
-    y = np.concatenate((trY, teY), axis=0).astype(np.int)
-    
-    seed = 547
-    np.random.seed(seed)
-    np.random.shuffle(X)
-    np.random.seed(seed)
-    np.random.shuffle(y)
-    
-    y_vec = np.zeros((len(y), self.y_dim), dtype=np.float)
-    for i, label in enumerate(y):
-      y_vec[i,y[i]] = 1.0
-    
-    return X/255.,y_vec
+    # else:
+    #   s_h, s_w = self.output_height, self.output_width
+    #   s_h2, s_h4 = int(s_h/2), int(s_h/4)
+    #   s_w2, s_w4 = int(s_w/2), int(s_w/4)
 
-  @property
-  def model_dir(self):
-    return "{}_{}_{}_{}".format(
-        self.dataset_name, self.batch_size,
-        self.output_height, self.output_width)
+    #   yb = tf.reshape(y, [self.batch_size, 1 , 1, self.y_dim])
+    #   z = tf.concat([z, y], 1)
 
-  def save(self, checkpoint_dir, step, filename='model', ckpt=True, frozen=False):
-    # model_name = "DCGAN.model"
-    # checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
+    #   model = tf.keras.Sequential()
 
-    filename += '.b' + str(self.batch_size)
-    if not os.path.exists(checkpoint_dir):
-      os.makedirs(checkpoint_dir)
+    #   model.add(tf.keras.layers.Dense(self.gfc_dim, use_bias=True, input_shape=[None, z.get_shape()[1]]))
+    #   model.add(tf.keras.layers.BatchNormalization())
+    #   model.add(tf.keras.layers.LeakyReLU())
+    #   model.add(tf.keras.layers.Concatenate(axis=1)[model.output, y])
+    #   assert model.output_shape == (None, self.gfc_dim, y.get_shape()[1])
 
-    if ckpt:
-      self.saver.save(self.tf_session,
-              os.path.join(checkpoint_dir, filename),
-              global_step=step)
+    #   model.add(tf.keras.layers.Dense(self.gf_dim*2*s_h4*s_w4, use_bias=True, ))
+    #   model.add(tf.keras.layers.BatchNormalization())
+    #   model.add(tf.keras.layers.LeakyReLU())
+    #   model.add(tf.keras.layers.Reshape(s_h4, s_w4, self.gf_dim * 2))
+    #   model.add(conv_cond_concat(x=model.output, y=yb))
+    #   assert model.output_shape == (None, s_h4, s_w4, self.gf_dim * 2)
 
-    if frozen:
-      tf.train.write_graph(
-              tf.graph_util.convert_variables_to_constants(self.tf_session, self.tf_session.graph_def, ["generator_1/Tanh"]),
-              checkpoint_dir,
-              '{}-{:06d}_frz.pb'.format(filename, step),
-              as_text=False)
+    #   model.add(tf.keras.layers.Conv2DTranspose(self.gf_dim * 2, (5, 5), strides=(2, 2), padding='same', use_bias=True))
+    #   model.add(tf.keras.layers.BatchNormalization())
+    #   model.add(tf.keras.layers.LeakyReLU())
+    #   model.add(conv_cond_concat(model.output, yb))
+    #   assert model.output_shape == (None, s_h2, s_w2, self.gf_dim*2)
 
-  def load(self, checkpoint_dir):
-    #import re
-    print(" [*] Reading checkpoints...", checkpoint_dir)
-    # checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
-    # print("     ->", checkpoint_dir)
+    #   model.add(tf.keras.layers.Conv2DTranspose(self.c_dim, (5, 5), strides=(2, 2), padding='same', use_bias=True, activation="sigmoid"))
+    #   assert model.output==(None, s_h, s_w, self.c_dim)
+    #   return model
 
-    ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
-    if ckpt and ckpt.model_checkpoint_path:
-      ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-      self.saver.restore(self.tf_session, os.path.join(checkpoint_dir, ckpt_name))
-      #counter = int(next(re.finditer("(\d+)(?!.*\d)",ckpt_name)).group(0))
-      counter = int(ckpt_name.split('-')[-1])
-      print(" [*] Success to read {}".format(ckpt_name))
-      return True, counter
+
+  def load_builtin_dataset(self):
+    logging.info("Loading built-in dataset, input_height and input_width will be reset")
+    (train_images, _), (_, _) = getattr(tf.keras.datasets, self.dataset_name).load_data()
+    self.input_height = self.input_width = train_images[0].shape[0]
+    if train_images[0].shape[-1] == 3: # either shape will be HxW or HxWx3
+      self.c_dim = 3
     else:
-      print(" [*] Failed to find a checkpoint")
-      return False, 0
+      self.c_dim = 1
+    
+    train_images = train_images.reshape(train_images.shape[0], self.input_width, self.input_height, self.c_dim).astype('float32')
+    train_images = (train_images - 127.5) / 127.5  # Normalize the images to [-1, 1]
+    self.buffer_size = train_images.shape[0]
+    test_dataset = np.ones(train_dataset.shape[0])
+    train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(self.buffer_size).batch(self.batch_size)
+    return train_dataset, test_dataset
+
+
+  # def sampler(self, z, y=None):
+  #   with tf.variable_scope("generator") as scope:
+  #     scope.reuse_variables()
+
+  #     if not self.y_dim:
+  #       s_h, s_w = self.output_height, self.output_width
+  #       s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
+  #       s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
+  #       s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
+  #       s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
+
+  #       # project `z` and reshape
+  #       h0 = tf.reshape(
+  #           linear(z, self.gf_dim*8*s_h16*s_w16, 'g_h0_lin'),
+  #           [-1, s_h16, s_w16, self.gf_dim * 8])
+  #       h0 = tf.nn.relu(self.g_bn0(h0, train=False))
+
+  #       h1 = deconv2d(h0, [self.batch_size, s_h8, s_w8, self.gf_dim*4], name='g_h1')
+  #       h1 = tf.nn.relu(self.g_bn1(h1, train=False))
+
+  #       h2 = deconv2d(h1, [self.batch_size, s_h4, s_w4, self.gf_dim*2], name='g_h2')
+  #       h2 = tf.nn.relu(self.g_bn2(h2, train=False))
+
+  #       h3 = deconv2d(h2, [self.batch_size, s_h2, s_w2, self.gf_dim*1], name='g_h3')
+  #       h3 = tf.nn.relu(self.g_bn3(h3, train=False))
+
+  #       h4 = deconv2d(h3, [self.batch_size, s_h, s_w, self.c_dim], name='g_h4')
+
+  #       return tf.nn.tanh(h4)
+  #     else:
+  #       s_h, s_w = self.output_height, self.output_width
+  #       s_h2, s_h4 = int(s_h/2), int(s_h/4)
+  #       s_w2, s_w4 = int(s_w/2), int(s_w/4)
+
+  #       # yb = tf.reshape(y, [-1, 1, 1, self.y_dim])
+  #       yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
+  #       z = concat([z, y], 1)
+
+  #       h0 = tf.nn.relu(self.g_bn0(linear(z, self.gfc_dim, 'g_h0_lin'), train=False))
+  #       h0 = concat([h0, y], 1)
+
+  #       h1 = tf.nn.relu(self.g_bn1(
+  #           linear(h0, self.gf_dim*2*s_h4*s_w4, 'g_h1_lin'), train=False))
+  #       h1 = tf.reshape(h1, [self.batch_size, s_h4, s_w4, self.gf_dim * 2])
+  #       h1 = conv_cond_concat(h1, yb)
+
+  #       h2 = tf.nn.relu(self.g_bn2(
+  #           deconv2d(h1, [self.batch_size, s_h2, s_w2, self.gf_dim * 2], name='g_h2'), train=False))
+  #       h2 = conv_cond_concat(h2, yb)
+
+  #       return tf.nn.sigmoid(deconv2d(h2, [self.batch_size, s_h, s_w, self.c_dim], name='g_h3'))
+
+
+
+  # @property
+  # def model_dir(self):
+  #   return "{}_{}_{}_{}".format(
+  #       self.dataset_name, self.batch_size,
+  #       self.output_height, self.output_width)
+
+  # def save(self, checkpoint_dir, step, filename='model', ckpt=True, frozen=False):
+  #   # model_name = "DCGAN.model"
+  #   # checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
+
+  #   filename += '.b' + str(self.batch_size)
+  #   if not os.path.exists(checkpoint_dir):
+  #     os.makedirs(checkpoint_dir)
+
+  #   if ckpt:
+  #     self.saver.save(self.tf_session,
+  #             os.path.join(checkpoint_dir, filename),
+  #             global_step=step)
+
+  #   if frozen:
+  #     tf.train.write_graph(
+  #             tf.graph_util.convert_variables_to_constants(self.tf_session, self.tf_session.graph_def, ["generator_1/Tanh"]),
+  #             checkpoint_dir,
+  #             '{}-{:06d}_frz.pb'.format(filename, step),
+  #             as_text=False)
+
+  # def load(self, checkpoint_dir):
+  #   #import re
+  #   print(" [*] Reading checkpoints...", checkpoint_dir)
+  #   # checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
+  #   # print("     ->", checkpoint_dir)
+
+  #   ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+  #   if ckpt and ckpt.model_checkpoint_path:
+  #     ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+  #     self.saver.restore(self.tf_session, os.path.join(checkpoint_dir, ckpt_name))
+  #     #counter = int(next(re.finditer("(\d+)(?!.*\d)",ckpt_name)).group(0))
+  #     counter = int(ckpt_name.split('-')[-1])
+  #     print(" [*] Success to read {}".format(ckpt_name))
+  #     return True, counter
+  #   else:
+  #     print(" [*] Failed to find a checkpoint")
+  #     return False, 0

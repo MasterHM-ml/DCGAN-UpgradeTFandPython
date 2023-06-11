@@ -1,18 +1,31 @@
-import math
+import tensorflow as tf
 
-def conv_out_size_same(size, stride):
-  return int(math.ceil(float(size) / float(stride)))
+batch_size=64
+(train_images, train_labels), (_, _) = tf.keras.datasets.mnist.load_data()
+train_images = train_images.reshape(train_images.shape[0], 28, 28, 1).astype('float32')
+train_images = (train_images - 127.5) / 127.5  # Normalize the images to [-1, 1]
+buffer_size = train_images.shape[0]
+train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(buffer_size).batch(batch_size)
 
-s_h, s_w = 28, 28
-print(s_h, s_w)
-s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
-print(s_h2, s_w2)
-s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
-print(s_h4, s_w4)
-s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
-print(s_h8, s_w8)
-s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
-print(s_h16, s_w16)
+
+
+
+
+# import math
+
+# def conv_out_size_same(size, stride):
+#   return int(math.ceil(float(size) / float(stride)))
+
+# s_h, s_w = 28, 28
+# print(s_h, s_w)
+# s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
+# print(s_h2, s_w2)
+# s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
+# print(s_h4, s_w4)
+# s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
+# print(s_h8, s_w8)
+# s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
+# print(s_h16, s_w16)
 
 
 

@@ -86,6 +86,25 @@ def imsave(images, size, path):
   image = np.squeeze(merge(images, size))
   return scipy.misc.imsave(path, image)
 
+def center_crop_v1(x, crop_h, crop_w,
+                resize_h=64, resize_w=64):
+  if crop_w is None:
+    crop_w = crop_h
+  h, w = x.shape[:2]
+  j = int(round((h - crop_h)/2.))
+  i = int(round((w - crop_w)/2.))
+  im = Image.fromarray(x[j:j+crop_h, i:i+crop_w])
+  return np.array(im.resize([resize_h, resize_w]), PIL.Image.BILINEAR)/127.5 - 1.0
+def transform_v1(image, input_height, input_width, 
+              resize_height=64, resize_width=64, crop=True):
+  # image = Image.fromarray(image)
+  if crop:
+    return  center_crop(
+      image, input_height, input_width, 
+      resize_height, resize_width)
+  else:
+    return np.array(image.resize([input_height, input_width]), PIL.Image.BILINEAR)/127.5 - 1.0
+  
 def center_crop(x, crop_h, crop_w,
                 resize_h=64, resize_w=64):
   if crop_w is None:
@@ -94,18 +113,19 @@ def center_crop(x, crop_h, crop_w,
   j = int(round((h - crop_h)/2.))
   i = int(round((w - crop_w)/2.))
   im = Image.fromarray(x[j:j+crop_h, i:i+crop_w])
-  return np.array(im.resize([resize_h, resize_w]), PIL.Image.BILINEAR)
-
+  return np.array(im.resize([resize_h, resize_w]), dtype=np.float32)/127.5 - 1.0
 def transform(image, input_height, input_width, 
               resize_height=64, resize_width=64, crop=True):
   if crop:
-    cropped_image = center_crop(
+    final_return = center_crop(
       image, input_height, input_width, 
       resize_height, resize_width)
   else:
-    im = Image.fromarray(image[j:j+crop_h, i:i+crop_w])
-  return np.array(im.resize([resize_h, resize_w]), PIL.Image.BILINEAR)/127.5 - 1.
-
+    image = Image.fromarray(image)
+    final_return = np.array(image.resize([input_height, input_width]), dtype=np.float32)/127.5 - 1.0
+  if final_return.shape[-1] !=3:
+    final_return = np.reshape(final_return, [final_return.shape[0], final_return.shape[1],1], )
+  return final_return
 def inverse_transform(images):
   return (images+1.)/2.
 

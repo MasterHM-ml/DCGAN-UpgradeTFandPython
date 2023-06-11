@@ -86,7 +86,6 @@ class DCGAN(object):
 
     if self.dataset_name in ["mnist", "fashion_mnist", "cifar10", "cifar100"]:
       self.data_X, self.data_y = self.load_builtin_dataset()
-      # self.c_dim = self.data_X[0].shape[-1]
     else:
       data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
       logging.info("loading custom data from %s." % data_path)
@@ -96,14 +95,18 @@ class DCGAN(object):
       if len(self.data_X) < self.batch_size: raise Exception("[!] Entire dataset size is less than the configured batch_size")
         
       if self.c_dim==1:
-        self.data_X = np.stack([np.reshape(np.array(Image.open(x).convert('L')), (self.input_height, self.input_width)) for x in self.data_X])
+        self.data_X = np.stack([transform(np.array(Image.open(x).convert('L')),\
+                                          self.input_height, self.input_width,\
+                                          self.output_height, self.output_width, self.crop)\
+                                          for x in self.data_X])
       elif self.c_dim==3:
-        self.data_X = np.stack([np.reshape(np.array(Image.open(x).convert('RGB')), (self.input_height, self.input_width, self.c_dim)) for x in self.data_X])
+        self.data_X = np.stack([transform(np.array(Image.open(x).convert('RGB')),\
+                                          self.input_height, self.input_width,\
+                                          self.output_height, self.output_width, self.crop)\
+                                          for x in self.data_X])
       else:
         raise Exception("[!] Unknown color dimension. Got argument 'c_dim'=%d" % self.c_dim)
       
-      np.random.shuffle(self.data_X)
-      self.data_X = (self.data_X - 127.5) / 127.5  # Normalize the images to [-1, 1]
       self.buffer_size = self.data_X.shape[0]
       self.data_y = np.ones(self.data_X.shape[0])
       self.data_X = tf.data.Dataset.from_tensor_slices(self.data_X).shuffle(self.buffer_size).batch(self.batch_size)
@@ -136,35 +139,37 @@ class DCGAN(object):
     self.z = tf.Variable(tf.zeros([None, self.z_dim]), dtype=tf.float32)
     self.z_sum = histogram_summary("z", self.z)
 
-    self.G = self.generator(self.z)
-    self.D, self.D_logits = self.discriminator(image_dims=image_dims,)
-    self.D_, self.D_logits_ = tf.keras.models.clone_model(self.D), tf.identity(self.D_logits)
+    self.generator_model = self.generator(self.z)
+    self.discriminator_model, self.D_logits = self.discriminator(image_dims=image_dims,)
+    # self.discriminator_model_, self.D_logits_ = tf.keras.models.clone_model(self.discriminator_model), tf.identity(self.D_logits)
     
-    self.d_sum = histogram_summary("d", self.D)
-    self.d__sum = histogram_summary("d_", self.D_)
-    self.G_sum = image_summary("G", self.G)
+    self.discriminator_model_summary = histogram_summary("d", self.discriminator_model)
+    # self.d__sum = histogram_summary("d_", self.D_)
+    self.generator_model_summary = image_summary("G", self.generator_model)
 
-    def sigmoid_cross_entropy_with_logits(x, y):
-      return tf.nn.sigmoid_cross_entropy_with_logits(logits=x, labels=y)
+    # def sigmoid_cross_entropy_with_logits(x, y):
+    #   return tf.nn.sigmoid_cross_entropy_with_logits(logits=x, labels=y)
 
-    self.d_loss_real = tf.reduce_mean(
-      sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D)))
-    self.d_loss_fake = tf.reduce_mean(
-      sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_)))
-    self.g_loss = tf.reduce_mean(
-      sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_)))
+    # self.d_loss_real = tf.reduce_mean(
+    #   sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.discriminator_model)))
+    # self.d_loss_fake = tf.reduce_mean(
+    #   sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_)))
+    # self.g_loss = tf.reduce_mean(
+    #   sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_)))
+    self.cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
+    # self.d_loss_real = self.cross_entropy(self.D_logits, tf.ones_like(self.D_))
 
-    self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
-    self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
+    # self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
+    # self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
                           
-    self.d_loss = self.d_loss_real + self.d_loss_fake
+    # self.d_loss = self.d_loss_real + self.d_loss_fake
 
-    self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
-    self.d_loss_sum = scalar_summary("d_loss", self.d_loss)
+    # self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
+    # self.d_loss_sum = scalar_summary("d_loss", self.d_loss)
 
     # t_vars = tf.trainable_variables()
-    self.d_vars = self.D.trainable_variables()
-    self.g_vars = self.G.trainable_variables()
+    # self.d_vars = self.discriminator_model.trainable_variables()
+    # self.g_vars = self.generator_model.trainable_variables()
 
     # self.d_vars = [var for var in t_vars if 'd_' in var.name]
     # self.g_vars = [var for var in t_vars if 'g_' in var.name]
@@ -172,22 +177,23 @@ class DCGAN(object):
     # self.saver = tf.train.Saver(max_to_keep=self.max_to_keep)
 
   def train(self, config):
-    d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
+    # TODO setup self.d_loss, self.g_loss and trainable variables again
+    d_optim = tf.keras.optimizers.Adam(config.learning_rate, beta1=config.beta1) \
               .minimize(self.d_loss, var_list=self.d_vars)
     g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
               .minimize(self.g_loss, var_list=self.g_vars)
-    try:
-      tf.global_variables_initializer().run()
-    except:
-      tf.initialize_all_variables().run()
+    # try:
+    #   tf.global_variables_initializer().run()
+    # except:
+    #   tf.initialize_all_variables().run()
 
-    if config.G_img_sum:
-      self.g_sum = merge_summary([self.z_sum, self.d__sum, self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
-    else:
-      self.g_sum = merge_summary([self.z_sum, self.d__sum, self.d_loss_fake_sum, self.g_loss_sum])
-    self.d_sum = merge_summary(
-        [self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
-    self.writer = SummaryWriter(os.path.join(self.out_dir, "logs"), self.tf_session.graph)
+    # if config.G_img_sum:
+    #   self.g_sum = merge_summary([self.z_sum, self.d__sum, self.generator_model_summary, self.d_loss_fake_sum, self.g_loss_sum])
+    # else:
+    #   self.g_sum = merge_summary([self.z_sum, self.d__sum, self.d_loss_fake_sum, self.g_loss_sum])
+    # self.discriminator_model_summary = merge_summary(
+    #     [self.z_sum, self.discriminator_model_summary, self.d_loss_real_sum, self.d_loss_sum])
+    # self.writer = SummaryWriter(os.path.join(self.out_dir, "logs"), self.tf_session.graph)
 
     sample_z = gen_random(config.z_dist, size=(self.sample_num , self.z_dim))
     
@@ -251,7 +257,7 @@ class DCGAN(object):
 
         if config.dataset == 'mnist':
           # Update D network
-          _, summary_str = self.tf_session.run([d_optim, self.d_sum],
+          _, summary_str = self.tf_session.run([d_optim, self.discriminator_model_summary],
             feed_dict={ 
               self.inputs: batch_images,
               self.z: batch_z,
@@ -286,7 +292,7 @@ class DCGAN(object):
           })
         else:
           # Update D network
-          _, summary_str = self.tf_session.run([d_optim, self.d_sum],
+          _, summary_str = self.tf_session.run([d_optim, self.discriminator_model_summary],
             feed_dict={ self.inputs: batch_images, self.z: batch_z })
           self.writer.add_summary(summary_str, counter)
 
@@ -557,7 +563,16 @@ class DCGAN(object):
     test_dataset = np.ones(train_dataset.shape[0])
     train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(self.buffer_size).batch(self.batch_size)
     return train_dataset, test_dataset
+  
 
+  def generator_loss(self, fake_output):
+    return self.cross_entropy(tf.ones_like(fake_output), fake_output)
+  def discriminator_loss(self, real_output, fake_output):
+    real_loss = self.cross_entropy(tf.ones_like(real_output), real_output)
+    fake_loss = self.cross_entropy(tf.zeros_like(fake_output), fake_output)
+    total_loss = real_loss + fake_loss
+    return total_loss
+  
 
   # def sampler(self, z, y=None):
   #   with tf.variable_scope("generator") as scope:

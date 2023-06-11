@@ -1,15 +1,59 @@
+# import tensorflow as tf
+
+# batch_size=64
+# (train_images, train_labels), (_, _) = tf.keras.datasets.mnist.load_data()
+# train_images = train_images.reshape(train_images.shape[0], 28, 28, 1).astype('float32')
+# train_images = (train_images - 127.5) / 127.5  # Normalize the images to [-1, 1]
+# buffer_size = train_images.shape[0]
+# train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(buffer_size).batch(batch_size)
+
+import numpy as np
+import PIL
+from PIL import Image
+import os
+from glob import glob
+import numpy as np
 import tensorflow as tf
+# from utils import transform
+def center_crop(x, crop_h, crop_w,
+                resize_h=64, resize_w=64):
+  if crop_w is None:
+    crop_w = crop_h
+  h, w = x.shape[:2]
+  j = int(round((h - crop_h)/2.))
+  i = int(round((w - crop_w)/2.))
+  im = Image.fromarray(x[j:j+crop_h, i:i+crop_w])
+  return np.array(im.resize([resize_h, resize_w]), dtype=np.float32)/127.5 - 1.0
 
+def transform(image, input_height, input_width, 
+              resize_height=64, resize_width=64, crop=True):
+  if crop:
+    final_return = center_crop(
+      image, input_height, input_width, 
+      resize_height, resize_width)
+  else:
+    image = Image.fromarray(image)
+    final_return = np.array(image.resize([input_height, input_width]), dtype=np.float32)/127.5 - 1.0
+  if final_return.shape[-1] !=3:
+    final_return = np.reshape(final_return, [final_return.shape[0], final_return.shape[1],1], )
+  return final_return
+  
+data_path = os.path.join("/media/master/Memories/HM", "*jpg")
+    #   logging.info("loading custom data from %s." % data_path)
+    #   logging.info("Please make sure all images are either RGB (3 channels) or grayscale (1 channels). Got argument 'c_dim'=%d" % self.c_dim)
 batch_size=64
-(train_images, train_labels), (_, _) = tf.keras.datasets.mnist.load_data()
-train_images = train_images.reshape(train_images.shape[0], 28, 28, 1).astype('float32')
-train_images = (train_images - 127.5) / 127.5  # Normalize the images to [-1, 1]
-buffer_size = train_images.shape[0]
-train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(buffer_size).batch(batch_size)
+data_X = glob(data_path)
+if len(data_X) == 0: raise Exception("[!] No data found in '" + data_path + "'")
+if len(data_X) < batch_size: raise Exception("[!] Entire dataset size is less than the configured batch_size")
 
+data_X_ = np.stack([transform(np.array(Image.open(x).convert("RGB")),
+                                        256, 256,\
+                                        64, 64, False)\
+                                        for x in data_X])
+buffer_size=data_X_.shape[0]
+data_X_tf = tf.data.Dataset.from_tensor_slices(data_X_).shuffle(buffer_size).batch(batch_size)
 
-
-
+x=0
 
 # import math
 

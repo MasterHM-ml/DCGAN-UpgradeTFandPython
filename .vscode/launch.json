@@ -20,7 +20,7 @@
       "program": "main.py",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "args": ["--dataset", "cifar10", "--input-height", "28", "--train", "True", "--checkpoint-dir", "checkpoints"]
+      "args": ["--epoch", "3", "--dataset", "cifar10", "--input-height", "28", "--train", "True", "--checkpoint-dir", "checkpoints"]
     }
   ]
 }

@@ -1,3 +1,11 @@
+import time
+import datetime
+
+print(str(datetime.date.today()))
+print(str(time.asctime()))
+print(time.strftime("%Y-%m-%d %H:%M:%S"))
+
+
 # import os
 # import subprocess
 # os.mkdir("test_dirs")

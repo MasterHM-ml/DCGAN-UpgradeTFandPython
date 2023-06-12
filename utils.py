@@ -4,7 +4,7 @@ Some codes from https://github.com/Newmu/dcgan_code
 from __future__ import division
 import math
 import json
-import moviepy
+# import moviepy
 import random
 import pprint
 import scipy.misc
@@ -19,7 +19,7 @@ import PIL
 from PIL import Image
 
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
+# import tensorflow.contrib.slim as slim
 
 pp = pprint.PrettyPrinter()
 
@@ -34,9 +34,9 @@ def timestamp(s='%Y%m%d.%H%M%S', ts=None):
   st = datetime.datetime.fromtimestamp(ts).strftime(s)
   return st
   
-def show_all_variables():
-  model_vars = tf.trainable_variables()
-  slim.model_analyzer.analyze_vars(model_vars, print_info=True)
+# def show_all_variables():
+#   model_vars = tf.trainable_variables()
+#   slim.model_analyzer.analyze_vars(model_vars, print_info=True)
 
 def get_image(image_path, input_height, input_width,
               resize_height=64, resize_width=64,

@@ -5,10 +5,20 @@ import argparse
 import numpy as np
 import json
 
+import time
+import datetime
+
 from model import DCGAN
-from utils import pp, visualize, to_json, show_all_variables, expand_path, timestamp
+# from utils import pp, visualize, to_json, show_all_variables, expand_path, timestamp
+from utils import expand_path
 
 import tensorflow as tf
+
+
+logging.basicConfig(level=logging.INFO, 
+                    format="%(asctime)s.%(msecs)03d [%(filename)s:%(lineno)d] %(levelname)s %(message)s",
+                    datefmt="%Y-%m-%d %H:%M:%S",)
+
 
 parser = argparse.ArgumentParser(description="Train, Test or Infer DCGAN")
 
@@ -25,7 +35,7 @@ parser.add_argument("--dataset", type=str, default="mnist", help="The name of da
 parser.add_argument("--input-fname-pattern", type=str, default="*.jpg", help="Glob pattern of filename of input images [*]")
 parser.add_argument("--data-dir", type=str, default="./data", help="path to datasets [e.g. $HOME/data]")
 parser.add_argument("--out-dir", type=str, default="./out", help="Root directory for outputs [e.g. $HOME/out]")
-parser.add_argument("--out-name", type=str, default="", help="Folder (under out_root_dir) for all outputs. Generated automatically if left blank []")
+# parser.add_argument("--out-name", type=str, default="", help="Folder (under out_root_dir) for all outputs. Generated automatically if left blank []")
 parser.add_argument("--checkpoint-dir", type=str, required=True, help="Folder (under out_root_dir/dataset+current date) to save checkpoints e.g. out/mnist_2023-06-11/checkpoint]")
 parser.add_argument("--sample-dir", type=str, default="samples", help="Folder (under out_root_dir/out_name) to save samples [samples]")
 parser.add_argument("--train", type=bool, default=False, help="True for training, False for testing [False]")
@@ -50,7 +60,7 @@ def main(args):
   # expand user name and environment variables
   args.data_dir = expand_path(args.data_dir)
   args.out_dir = expand_path(args.out_dir)
-  args.out_name = expand_path(args.out_name)
+  # args.out_name = expand_path(args.out_name)
   args.checkpoint_dir = expand_path(args.checkpoint_dir)
   args.sample_dir = expand_path(args.sample_dir)
 
@@ -59,15 +69,17 @@ def main(args):
   if args.output_width is None: args.output_width = args.output_height
 
   # output folders
-  if args.out_name == "":
-      args.out_name = '{} - {} - {}'.format(timestamp(), args.data_dir.split('/')[-1], args.dataset) # penultimate folder of path
-      if args.train:
-        args.out_name += ' - x{}.z{}.{}.y{}.b{}'.format(args.input_width, args.z_dim, args.z_dist, args.output_width, args.batch_size)
+  # if args.out_name == "":
+  #     args.out_name = '{} - {} - {}'.format(timestamp(), args.data_dir.split('/')[-1], args.dataset) # penultimate folder of path
+  #     if args.train:
+  #       args.out_name += ' - x{}.z{}.{}.y{}.b{}'.format(args.input_width, args.z_dim, args.z_dist, args.output_width, args.batch_size)
 
-  args.out_dir = os.path.join(args.out_dir, args.out_name)
+  if not os.path.exists(args.out_dir): os.makedirs(args.out_dir)
+  args.out_dir = os.path.join(args.out_dir, f"{args.dataset}_{str(datetime.date.today())}")
   args.checkpoint_dir = os.path.join(args.out_dir, args.checkpoint_dir)
-  args.sample_dir = os.path.join(args.out_dir, args.sample_dir)
-
+  args.sample_dir = os.path.join(args.out_dir, f"{args.sample_dir}_{str(time.strftime('%Y-%m-%d %H:%M:%S'))}")
+  
+  if not os.path.exists(args.out_dir): os.makedirs(args.out_dir)
   if not os.path.exists(args.checkpoint_dir): os.makedirs(args.checkpoint_dir)
   if not os.path.exists(args.sample_dir): os.makedirs(args.sample_dir)
 
@@ -119,10 +131,10 @@ def main(args):
       out_dir=args.out_dir,
       max_to_keep=args.max_to_keep)
 
-  for var in dcgan.generator_model:
-    logging.log(f"{var.name} :: {var.shape}")
-  for var in dcgan.discriminator:
-    logging.log(f"{var.name} :: {var.shape}")
+  for var in dcgan.generator_model.trainable_variables:
+    logging.info(f"{var.name} :: {var.shape}")
+  for var in dcgan.discriminator.trainable_variables:
+    logging.info(f"{var.name} :: {var.shape}")
 
     if args.train:
       dcgan.train(args)

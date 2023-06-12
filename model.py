@@ -3,7 +3,8 @@ from __future__ import print_function
 from typing import List, Dict
 import os
 import time
-from datetime import datetime
+# from datetime import date, datetime
+# import datetime
 import math
 import logging
 from tqdm import trange
@@ -99,14 +100,15 @@ class DCGAN(object):
     self.dataset_name = dataset_name
     self.data_dir = data_dir
     self.input_fname_pattern = input_fname_pattern
-    self.out_dir = os.path.join(out_dir, f"{self.dataset_name}_{datetime.now().date()}")
+    self.out_dir = out_dir
+    self.checkpoint_dir = checkpoint_dir
 
-    self.checkpoint_dir = os.path.join(self.out_dir, checkpoint_dir)
+
     self.checkpoint_best_model = os.path.join(self.checkpoint_dir, "best_model")
     self.checkpoint_best_gen = os.path.join(self.checkpoint_best_model, "gen")
     self.checkpoint_best_dis = os.path.join(self.checkpoint_best_model, "dis")
     self.max_to_keep = max_to_keep
-    self.sample_dir = os.path.join(self.out_dir, f"{sample_dir}_{datetime.now()}")
+    self.sample_dir = sample_dir
 
     if self.dataset_name in ["mnist", "fashion_mnist", "cifar10", "cifar100"]:
       self.data_X, self.data_Y = self.load_builtin_dataset()
@@ -138,8 +140,8 @@ class DCGAN(object):
 
     # self.z = tf.placeholder(
     #   tf.float32, [None, self.z_dim], name='z')
-    self.z = tf.Variable(tf.zeros([None, self.z_dim]), dtype=tf.float32)
-    self.z_sum = histogram_summary("z", self.z)
+    self.z = tf.Variable(tf.zeros([self.batch_size, self.z_dim]), dtype=tf.float32)
+    # self.z_sum = histogram_summary("z", self.z)
 
     self.generator_model = self.generator(self.z)
     self.discriminator_model = self.discriminator(image_dims)
@@ -158,7 +160,7 @@ class DCGAN(object):
     # self.d_loss_real = self.cross_entropy(self.D_logits, tf.ones_like(self.D_))
 
     self.d_optim = tf.keras.optimizers.Adam()# .minimize(self.d_loss, var_list=self.d_vars)
-    self.g_optim = tf.train.optimizers.Adam()# .minimize(self.g_loss, var_list=self.g_vars)
+    self.g_optim = tf.keras.optimizers.Adam()# .minimize(self.g_loss, var_list=self.g_vars)
     
     
     # self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
@@ -438,8 +440,10 @@ class DCGAN(object):
     model.add(tf.keras.layers.Dense(1, use_bias=True, name="h4",
                                     kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02, seed=None),
                                     bias_initializer=tf.keras.initializers.Constant(value=0),))
-    h4_logits = model.get_layer()
-    model.add(tf.keras.layers.Activation(tf.nn.sigmoid))
+    # h4_logits = model.get_layer('h4')
+    #TODO whether to comment/uncomment - verify from old train method
+    # either old repo uses h4 or sigmoid
+    # model.add(tf.keras.layers.Activation(tf.nn.sigmoid)) 
     # return model, h4_logits
     return model
 
@@ -512,7 +516,7 @@ class DCGAN(object):
 
     model = tf.keras.Sequential()
     
-    model.add(layers.Dense(self.gf_dim*8*s_h16*s_w16, use_bias=True, input_shape=z.get_shape()[1],
+    model.add(layers.Dense(self.gf_dim*8*s_h16*s_w16, use_bias=True, input_shape=[z.get_shape()[1]],
                            kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02, seed=None),
                            bias_initializer=tf.keras.initializers.Constant(value=0),))
     model.add(layers.BatchNormalization())
@@ -595,7 +599,7 @@ class DCGAN(object):
     train_images = train_images.reshape(train_images.shape[0], self.input_width, self.input_height, self.c_dim).astype('float32')
     train_images = (train_images - 127.5) / 127.5  # Normalize the images to [-1, 1]
     self.buffer_size = train_images.shape[0]
-    test_dataset = np.ones(train_dataset.shape[0])
+    test_dataset = np.ones(train_images.shape[0])
     train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(self.buffer_size).batch(self.batch_size)
     test_dataset = tf.data.Dataset.from_tensor_slices(test_dataset).shuffle(self.buffer_size).batch(self.batch_size)
     return train_dataset, test_dataset

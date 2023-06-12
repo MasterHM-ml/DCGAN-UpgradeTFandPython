@@ -1,9 +1,34 @@
-import time
-import datetime
 
-print(str(datetime.date.today()))
-print(str(time.asctime()))
-print(time.strftime("%Y-%m-%d %H:%M:%S"))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# import time
+# import datetime
+
+# print(str(datetime.date.today()))
+# print(str(time.asctime()))
+# print(time.strftime("%Y-%m-%d %H:%M:%S"))
 
 
 # import os

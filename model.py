@@ -3,8 +3,6 @@ from __future__ import print_function
 from typing import List, Dict
 import os
 import time
-# from datetime import date, datetime
-# import datetime
 import math
 import logging
 from tqdm import trange
@@ -20,8 +18,10 @@ from six.moves import xrange # pyright: ignore
 from ops import *
 from utils import *
 
+
 def conv_out_size_same(size, stride):
   return int(math.ceil(float(size) / float(stride)))
+
 
 def gen_random(mode, size):
     if mode=='normal01': return np.random.normal(0,1,size=size)
@@ -33,8 +33,9 @@ def gen_random(mode, size):
 
 class Losses:
   def __init__(self):
-    self.running_loss = List
-    self.epoch_loss = List
+    self.running_loss = []
+    self.epoch_loss = []
+
 
 class ModelLosses:
   def __init__(self):
@@ -44,11 +45,11 @@ class ModelLosses:
 
 
 class DCGAN(object):
-  def __init__(self, tf_session=None, input_height=108, input_width=108, crop=True,
+  def __init__(self, input_height=108, input_width=108, crop=True,
          batch_size=64, sample_num = 64, output_height=64, output_width=64,
          y_dim=None, z_dim=100, gf_dim=64, df_dim=64,
          gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='default',
-         max_to_keep=1,
+         max_to_keep=1, early_stop_count=20,
          input_fname_pattern='*.jpg', checkpoint_dir='ckpts', sample_dir='samples', out_dir='./out', data_dir='./data'):
     """
 
@@ -102,6 +103,7 @@ class DCGAN(object):
     self.input_fname_pattern = input_fname_pattern
     self.out_dir = out_dir
     self.checkpoint_dir = checkpoint_dir
+    self.early_stop_count = early_stop_count
 
 
     self.checkpoint_best_model = os.path.join(self.checkpoint_dir, "best_model")
@@ -126,6 +128,7 @@ class DCGAN(object):
     # else:
     #   self.y = None
 
+    # TODO if crop is True, input must higher than output dimensions
     if self.crop:
       image_dims = [self.output_height, self.output_width, self.c_dim]
     else:
@@ -143,7 +146,7 @@ class DCGAN(object):
     self.z = tf.Variable(tf.zeros([self.batch_size, self.z_dim]), dtype=tf.float32)
     # self.z_sum = histogram_summary("z", self.z)
 
-    self.generator_model = self.generator(self.z)
+    self.generator_model = self.generator(self.z, image_dims)
     self.discriminator_model = self.discriminator(image_dims)
     # self.discriminator_model, self.D_logits = self.discriminator(image_dims=image_dims,)
     # self.discriminator_model_, self.D_logits_ = tf.keras.models.clone_model(self.discriminator_model), tf.identity(self.D_logits)
@@ -155,7 +158,11 @@ class DCGAN(object):
     #   sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_)))
     # self.g_loss = tf.reduce_mean(
     #   sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_)))
-    self.cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
+    # self.cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
+    self.cross_entropy = tf.keras.losses.get({
+      "class_name": "BinaryCrossentropy",
+      "config": {"from_logits":True}
+    })
     self.losses: ModelLosses = ModelLosses()
     # self.d_loss_real = self.cross_entropy(self.D_logits, tf.ones_like(self.D_))
 
@@ -186,8 +193,8 @@ class DCGAN(object):
 
   def train(self, config):
     early_stop_count = 0
-    self.d_optim = tf.keras.optimizers.Adam(config.learning_rate, beta1=config.beta1)# .minimize(self.d_loss, var_list=self.d_vars)
-    self.g_optim = tf.train.optimizers.Adam(config.learning_rate, beta1=config.beta1)# .minimize(self.g_loss, var_list=self.g_vars)
+    self.d_optim = tf.keras.optimizers.Adam(config.learning_rate)#, beta1=config.beta1).minimize(self.d_loss, var_list=self.d_vars)
+    self.g_optim = tf.keras.optimizers.Adam(config.learning_rate)#, beta1=config.beta1).minimize(self.g_loss, var_list=self.g_vars)
     # try:
     #   tf.global_variables_initializer().run()
     # except:
@@ -206,7 +213,7 @@ class DCGAN(object):
     # sample_inputs = self.data_X[0:self.batch_size]
     # sample_inputs = next(iter(self.data_X))
     # sample_labels = self.data_Y[0:self.batch_size]
-    self.num_of_batches = self.data_X[0] // self.batch_size
+    self.num_of_batches = self.num_of_images_in_dataset // self.batch_size
     # if config.dataset == 'mnist':
     #   sample_inputs = self.data_X[0:self.batch_size]
     #   sample_labels = self.data_y[0:self.sample_num]
@@ -246,20 +253,31 @@ class DCGAN(object):
         #   batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
 
         for idx, batch_images in enumerate(self.data_X):
-          self.train_step(batch_images)
+          gl, dl = self.train_step(batch_images)
+          self.losses.discriminator.running_loss.append(tf.reduce_mean(dl).numpy().item())
+          self.losses.generator.running_loss.append(tf.reduce_mean(gl).numpy().item())
 
           if np.mod(idx, config.sample_freq) == 0:
             logging.info("[Epoch:[%2d/%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
-              % (epoch, config.epoch, idx, self.num_of_batches,
-                time.time() - start_time, self.losses.discriminator.epoch_loss[-1],\
-                   self.losses.generator.epoch_loss[-1]))
+              % (epoch, config.epoch, idx, self.num_of_batches*self.batch_size,
+                time.time() - start_time, np.mean(self.losses.discriminator.running_loss).item(),\
+                   np.mean(self.losses.generator.running_loss).item()))
+          
+          if idx == 2:
+            break
             
 
 
-        self.losses.generator.epoch_loss.append(np.mean(self.losses.generator.running_loss))
-        self.losses.discriminator.epoch_loss.append(np.mean(self.losses.discriminator.running_loss))
+        self.losses.generator.epoch_loss.append(np.mean(self.losses.generator.running_loss).item())
+        self.losses.discriminator.epoch_loss.append(np.mean(self.losses.discriminator.running_loss).item())
         self.losses.generator.running_loss.clear()
         self.losses.discriminator.running_loss.clear()
+        if np.mod(idx, config.sample_freq) == 0:
+          logging.info("[Epoch:[%2d/%2d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
+            % (epoch, config.epoch,
+              time.time() - start_time, self.losses.discriminator.epoch_loss[-1],\
+                  self.losses.generator.epoch_loss[-1]))
+        
         if np.mod(epoch, config.sample_freq) == 0:
           self.generate_and_save_images(self.generator_model, epoch+1, sample_z)
 
@@ -367,8 +385,8 @@ class DCGAN(object):
           #       print("one pic error!...")
 
         if np.mod(epoch, config.ckpt_freq) == 0:
-          if os.listdir(self.checkpoint_dir) > self.max_to_keep:
-            old_ckpt = sorted(os.listdir(self.checkpoint_dir))[-1]
+          if len(os.listdir(self.checkpoint_dir)) > self.max_to_keep:
+            old_ckpt = sorted(os.listdir(self.checkpoint_dir))[0]
             os.remove(os.path.join(self.checkpoint_dir, old_ckpt))
           self.checkpoint.save(file_prefix = self.checkpoint_dir)
           
@@ -380,9 +398,8 @@ class DCGAN(object):
           minimum_loss = self.losses.generator.epoch_loss[-1]
           tf.saved_model.save(self.generator_model, self.checkpoint_best_gen)
           tf.saved_model.save(self.discriminator_model, self.checkpoint_best_dis)
-          
-
-          
+      return
+    logging.info("Training Completed!!!!")
   def discriminator_v1(self, image, y=None, reuse=False):
     with tf.variable_scope("discriminator") as scope:
       if reuse:
@@ -506,9 +523,9 @@ class DCGAN(object):
 
         return tf.nn.sigmoid(
             deconv2d(h2, [self.batch_size, s_h, s_w, self.c_dim], name='g_h3'))
-  def generator(self, z,):
+  def generator(self, z, image_dims):
     # if not self.y_dim:
-    s_h, s_w = self.output_height, self.output_width
+    s_h, s_w = image_dims[0], image_dims[1]
     s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
     s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
     s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
@@ -595,7 +612,7 @@ class DCGAN(object):
       self.c_dim = 3
     else:
       self.c_dim = 1
-    
+    self.num_of_images_in_dataset = train_images.shape[0]
     train_images = train_images.reshape(train_images.shape[0], self.input_width, self.input_height, self.c_dim).astype('float32')
     train_images = (train_images - 127.5) / 127.5  # Normalize the images to [-1, 1]
     self.buffer_size = train_images.shape[0]
@@ -625,7 +642,7 @@ class DCGAN(object):
                                         for x in path_to_images])
     else:
       raise Exception("[!] Unknown color dimension. Got argument 'c_dim'=%d" % self.c_dim)
-    
+    self.num_of_images_in_dataset = len(path_to_images)
     self.buffer_size = data_X_np.shape[0]
     train_dataset_y = tf.data.Dataset.from_tensor_slices(np.ones(data_X_np.shape[0])).shuffle(self.buffer_size).batch(self.batch_size)
     train_dataset_x = tf.data.Dataset.from_tensor_slices(data_X_np).shuffle(self.buffer_size).batch(self.batch_size)
@@ -634,15 +651,17 @@ class DCGAN(object):
 
   def generator_loss(self, fake_output):
     total_loss = self.cross_entropy(tf.ones_like(fake_output), fake_output)
-    # TODO instead of logits or complex structure, store actual value only
-    self.losses.generator.running_loss.append(total_loss) 
+    # self.losses.generator.running_loss.append(tf.reduce_mean(total_loss).numpy) 
     return total_loss
+    # total_loss_np = self.cross_entropy(tf.ones_like(fake_output), fake_output).numpy()
   def discriminator_loss(self, real_output, fake_output):
     real_loss = self.cross_entropy(tf.ones_like(real_output), real_output)
+    # real_loss_np = self.cross_entropy(tf.ones_like(real_output), real_output).numpy()
     fake_loss = self.cross_entropy(tf.zeros_like(fake_output), fake_output)
+    # fake_loss_np = self.cross_entropy(tf.zeros_like(fake_output), fake_output).numpy()
     total_loss = real_loss + fake_loss
     # TODO instead of logits or complex structure, store actual value only
-    self.losses.discriminator.running_loss.append(total_loss)
+    # self.losses.discriminator.running_loss.append(tf.reduce_mean(total_loss).numpy)
     return total_loss
   
 
@@ -650,7 +669,7 @@ class DCGAN(object):
   def train_step(self, images):
     noise = tf.random.normal([self.batch_size, self.z_dim])
 
-    with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
+    with tf.GradientTape() as gen_tape, tf.GradientTape() as gen_tape_2, tf.GradientTape() as disc_tape:
       generated_images = self.generator_model(noise, training=True)
 
       real_output = self.discriminator_model(images, training=True)
@@ -662,11 +681,13 @@ class DCGAN(object):
     # updating generator twice a step - as done in original repo
     gradients_of_generator = gen_tape.gradient(gen_loss, self.generator_model.trainable_variables)
     self.g_optim.apply_gradients(zip(gradients_of_generator, self.generator_model.trainable_variables))
-    gradients_of_generator = gen_tape.gradient(gen_loss, self.generator_model.trainable_variables)
+    gradients_of_generator = gen_tape_2.gradient(gen_loss, self.generator_model.trainable_variables)
     self.g_optim.apply_gradients(zip(gradients_of_generator, self.generator_model.trainable_variables))
 
     gradients_of_discriminator = disc_tape.gradient(disc_loss, self.discriminator_model.trainable_variables)
     self.d_optim.apply_gradients(zip(gradients_of_discriminator, self.discriminator_model.trainable_variables))
+
+    return gen_loss, disc_loss
 
 
   def generate_and_save_images(self, model, epoch, test_input,):
@@ -676,8 +697,10 @@ class DCGAN(object):
     if self.c_dim == 1:
       cmap_ = "gray"
     else:
-      cmap_ = "RGB"
+      cmap_ = None
     for i in range(predictions.shape[0]):
+        if i == 16: # TODO fix it - subplots are 16 only, will output 16 images only
+          break
         plt.subplot(4, 4, i+1)
         plt.imshow(predictions[i, :, :, 0] * 127.5 + 127.5, cmap=cmap_)
         plt.axis('off')
@@ -689,7 +712,9 @@ class DCGAN(object):
       fig = plt.figure(figsize=(4, 4))
       plt.plot(self.losses.discriminator.epoch_loss, label="Discriminator Loss", linewidth=2, marker="*")
       plt.plot(self.losses.generator.epoch_loss, label="Generator Loss", linewidth=2, marker="*")
+      plt.legend()
       plt.savefig(os.path.join(self.sample_dir, "losses.png"))
+
 
   def load_and_generate_images(self, args):
     logging.info(" [*] Reading checkpoints... %s" % args.checkpoint_dir)

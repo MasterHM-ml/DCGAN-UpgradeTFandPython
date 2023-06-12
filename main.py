@@ -37,6 +37,7 @@ parser.add_argument("--data-dir", type=str, default="./data", help="path to data
 parser.add_argument("--out-dir", type=str, default="./out", help="Root directory for outputs [e.g. $HOME/out]")
 # parser.add_argument("--out-name", type=str, default="", help="Folder (under out_root_dir) for all outputs. Generated automatically if left blank []")
 parser.add_argument("--checkpoint-dir", type=str, required=True, help="Folder (under out_root_dir/dataset+current date) to save checkpoints e.g. out/mnist_2023-06-11/checkpoint]")
+parser.add_argument("--early-stop-count", type=int, default=20, help="Number of epochs to wait before training can be quit as model is not learning")
 parser.add_argument("--sample-dir", type=str, default="samples", help="Folder (under out_root_dir/out_name) to save samples [samples]")
 parser.add_argument("--train", type=bool, default=False, help="True for training, False for testing [False]")
 parser.add_argument("--crop", type=bool, default=False, help="True for training, False for testing [False]")
@@ -126,14 +127,17 @@ def main(args):
       input_fname_pattern=args.input_fname_pattern,
       crop=args.crop,
       checkpoint_dir=args.checkpoint_dir,
+      early_stop_count=args.early_stop_count,
       sample_dir=args.sample_dir,
       data_dir=args.data_dir,
       out_dir=args.out_dir,
       max_to_keep=args.max_to_keep)
 
+  logging.info("**********logging generator trainable variables**********")
   for var in dcgan.generator_model.trainable_variables:
     logging.info(f"{var.name} :: {var.shape}")
-  for var in dcgan.discriminator.trainable_variables:
+  logging.info("*******logging discriminator trainable variables**********")
+  for var in dcgan.discriminator_model.trainable_variables:
     logging.info(f"{var.name} :: {var.shape}")
 
     if args.train:

@@ -4,6 +4,7 @@
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
+
     {
       "name": "Code Tester",
       "type": "python",
@@ -18,7 +19,8 @@
       "request": "launch",
       "program": "main.py",
       "console": "integratedTerminal",
-      "justMyCode": true
+      "justMyCode": true,
+      "args": ["--dataset", "cifar10", "--input-height", "28", "--train", "True", "--checkpoint-dir", "checkpoints"]
     }
   ]
 }

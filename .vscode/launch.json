@@ -20,7 +20,7 @@
       "program": "main.py",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "args": ["--epoch", "3", "--dataset", "cifar10", "--input-height", "28", "--train", "True", "--checkpoint-dir", "checkpoints"]
+      "args": ["--epoch", "1", "--dataset", "fashion_mnist", "--output-height", "32", "--checkpoint-dir", "checkpoints", "--crop", "false", ]
     }
   ]
 }

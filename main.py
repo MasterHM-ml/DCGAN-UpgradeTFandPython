@@ -49,6 +49,7 @@ parser.add_argument("--visualize", type=bool, default=False, help="True for visu
 parser.add_argument("--max-to-keep", type=int, default=3, help="maximum number of checkpoints to keep")
 parser.add_argument("--sample-freq", type=int, default=1, help="sample every this many epochs")
 parser.add_argument("--ckpt-freq", type=int, default=1, help="save checkpoint every this many epochs")
+parser.add_argument("--logging-frequency", type=int, default=1, help="print log every this many batch/iterations")
 parser.add_argument("--z-dim", type=int, default=100, help="dimensions of z")
 parser.add_argument("--generate-test-images", type=int, default=100,
                     help="Number of images to generate during test. [100]")
@@ -116,7 +117,6 @@ def main(args):
         output_width=args.output_width,
         output_height=args.output_height,
         batch_size=args.batch_size,
-        sample_num=args.batch_size,
         z_dim=args.z_dim,
         train=args.train,
         dataset_name=args.dataset,

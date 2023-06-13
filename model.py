@@ -655,6 +655,8 @@ class DCGAN(object):
     if len(path_to_images) == 0: raise Exception("[!] No data found in '" + data_path + "'")
     if len(path_to_images) < self.batch_size: raise Exception("[!] Entire dataset size is less than the configured batch_size")
       
+    if Image.open(path_to_images[0]).size != (self.input_width, self.input_height):
+      logging.warning("[!] Image dim, and provided input_height, input_width are not same.")
     if self.c_dim==1:
       data_X_np = np.stack([transform(np.array(Image.open(x).convert('L')),\
                                         self.input_height, self.input_width,\

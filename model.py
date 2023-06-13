@@ -50,15 +50,14 @@ class DCGAN(object):
                  input_fname_pattern='*.jpg', checkpoint_dir='ckpts', sample_dir='samples', out_dir='./out',
                  data_dir='./data'):
         """
-
-    Args:
-      batch_size: The size of batch. Should be specified before training.
-      z_dim: (optional) Dimension of dim for Z. [100]
-      gf_dim: (optional) Dimension of gen filters in first conv layer. [64]
-      df_dim: (optional) Dimension of discriminator filters in first conv layer. [64]
-      gfc_dim: (optional) Dimension of gen units for fully connected layer. [1024]
-      dfc_dim: (optional) Dimension of discriminator units for fully connected layer. [1024]
-    """
+        Args:
+        batch_size: The size of batch. Should be specified before training.
+        z_dim: (optional) Dimension of dim for Z. [100]
+        gf_dim: (optional) Dimension of gen filters in first conv layer. [64]
+        df_dim: (optional) Dimension of discriminator filters in first conv layer. [64]
+        gfc_dim: (optional) Dimension of gen units for fully connected layer. [1024]
+        dfc_dim: (optional) Dimension of discriminator units for fully connected layer. [1024]
+        """
         self.z = None
         self.num_of_batches = None
         self.num_of_images_in_dataset = None
@@ -167,16 +166,15 @@ class DCGAN(object):
                     gl, dl = self.train_step(batch_images)
                     self.losses.discriminator.running_loss.append(tf.reduce_mean(dl).numpy().item())
                     self.losses.generator.running_loss.append(tf.reduce_mean(gl).numpy().item())
-                    # TODO parameterize the logging
-                    if np.mod(idx, config.sample_freq) == 0:
+                    if np.mod(idx, config.logging_frequency) == 0:
                         logging.info("[Epoch:[%2d/%2d] [Batch# [%4d/%4d]] time: %4.4f, d_loss: %.8f, g_loss: %.8f"
                                      % (epoch + 1, config.epoch, idx + 1, self.num_of_batches * self.batch_size,
                                         time.time() - start_time,
                                         np.mean(self.losses.discriminator.running_loss).item(),
                                         np.mean(self.losses.generator.running_loss).item()))
 
-                    # if idx == 2:
-                    #     break
+                    if idx == 2:
+                        break
 
                 self.losses.generator.epoch_loss.append(np.mean(self.losses.generator.running_loss).item())
                 self.losses.discriminator.epoch_loss.append(np.mean(self.losses.discriminator.running_loss).item())

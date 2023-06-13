@@ -45,6 +45,8 @@ def merge(images, size):
 
 def im_save(images, size, path):
     image = np.squeeze(merge(images, size))
+    if image.dtype == np.float64:
+        return Image.fromarray((image * 255).astype(np.uint8)).save(path)
     return Image.fromarray(image).save(path)
 
 

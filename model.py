@@ -47,9 +47,9 @@ class ModelLosses:
 class DCGAN(object):
   def __init__(self, input_height=108, input_width=108, crop=True,
          batch_size=64, sample_num = 64, output_height=64, output_width=64,
-         y_dim=None, z_dim=100, gf_dim=64, df_dim=64,
+         y_dim=None, z_dim=100, gf_dim=64, df_dim=64, train=True,
          gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='default',
-         max_to_keep=1, early_stop_count=20,
+         max_to_keep=1, early_stop_count=20, checkpoint_prefix="checkpoint",
          input_fname_pattern='*.jpg', checkpoint_dir='ckpts', sample_dir='samples', out_dir='./out', data_dir='./data'):
     """
 
@@ -66,6 +66,7 @@ class DCGAN(object):
     """
     # self.tf_session = tf_session
     self.crop = crop
+    self.do_training=train
 
     self.batch_size = batch_size
     # self.sample_num = sample_num
@@ -75,7 +76,7 @@ class DCGAN(object):
     self.output_height = output_height
     self.output_width = output_width
 
-    self.y_dim = y_dim
+    # self.y_dim = y_dim
     self.z_dim = z_dim
 
     self.gf_dim = gf_dim
@@ -103,6 +104,7 @@ class DCGAN(object):
     self.input_fname_pattern = input_fname_pattern
     self.out_dir = out_dir
     self.checkpoint_dir = checkpoint_dir
+    self.checkpoint_prefix = checkpoint_prefix
     self.early_stop_count = early_stop_count
 
 
@@ -111,11 +113,13 @@ class DCGAN(object):
     self.checkpoint_best_dis = os.path.join(self.checkpoint_best_model, "dis")
     self.max_to_keep = max_to_keep
     self.sample_dir = sample_dir
+    self.image_io_json = os.path.join(self.checkpoint_dir, "image_io.json")
 
-    if self.dataset_name in ["mnist", "fashion_mnist", "cifar10", "cifar100"]:
-      self.data_X, self.data_Y = self.load_builtin_dataset()
-    else:
-      self.data_X, self.data_Y = self.load_custom_dataset()
+    if self.do_training:
+      if self.dataset_name in ["mnist", "fashion_mnist", "cifar10", "cifar100"]:
+        self.data_X, self.data_Y = self.load_builtin_dataset()
+      else:
+        self.data_X, self.data_Y = self.load_custom_dataset()
       
     # self.grayscale = (self.c_dim == 1)
 
@@ -128,11 +132,23 @@ class DCGAN(object):
     # else:
     #   self.y = None
 
-    # TODO if crop is True, input must higher than output dimensions
-    if self.crop:
-      image_dims = [self.output_height, self.output_width, self.c_dim]
+    if not self.do_training:
+      if len(glob((os.path.join(self.checkpoint_dir, "checkpoint*")))) == 0:
+        raise ValueError("Can't find checkpoints in %s. Did you even trained model on %s?" % (self.checkpoint_dir, self.dataset_name))
+      if not os.path.exists(self.image_io_json):
+        raise ValueError("Can't find crucial image_io data file under %s that was saved during training" % self.image_io_json)
+      
+      with open(self.image_io_json, "r") as ff:
+        ff = json.load(ff)
+        self.input_height = self.input_width = ff["input_height_width"]
+        self.output_height = self.output_width = ff["output_height_width"]
+        self.c_dim = ff["channel"]
+        image_dims = [self.input_height, self.input_width, self.c_dim]
     else:
-      image_dims = [self.input_height, self.input_width, self.c_dim]
+      if self.crop:
+        image_dims = [self.output_height, self.output_width, self.c_dim]
+      else:
+        image_dims = [self.input_height, self.input_width, self.c_dim]
 
     # self.inputs = tf.placeholder(
     #   tf.float32, [self.batch_size] + image_dims, name='real_images')
@@ -258,8 +274,8 @@ class DCGAN(object):
           self.losses.generator.running_loss.append(tf.reduce_mean(gl).numpy().item())
 
           if np.mod(idx, config.sample_freq) == 0:
-            logging.info("[Epoch:[%2d/%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
-              % (epoch, config.epoch, idx, self.num_of_batches*self.batch_size,
+            logging.info("[Epoch:[%2d/%2d] [Batch# [%4d/%4d]] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
+              % (epoch+1, config.epoch, idx+1, self.num_of_batches*self.batch_size,
                 time.time() - start_time, np.mean(self.losses.discriminator.running_loss).item(),\
                    np.mean(self.losses.generator.running_loss).item()))
           
@@ -274,7 +290,7 @@ class DCGAN(object):
         self.losses.discriminator.running_loss.clear()
         if np.mod(idx, config.sample_freq) == 0:
           logging.info("[Epoch:[%2d/%2d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
-            % (epoch, config.epoch,
+            % (epoch+1, config.epoch,
               time.time() - start_time, self.losses.discriminator.epoch_loss[-1],\
                   self.losses.generator.epoch_loss[-1]))
         
@@ -385,10 +401,10 @@ class DCGAN(object):
           #       print("one pic error!...")
 
         if np.mod(epoch, config.ckpt_freq) == 0:
-          if len(os.listdir(self.checkpoint_dir)) > self.max_to_keep:
-            old_ckpt = sorted(os.listdir(self.checkpoint_dir))[0]
-            os.remove(os.path.join(self.checkpoint_dir, old_ckpt))
-          self.checkpoint.save(file_prefix = self.checkpoint_dir)
+          if len(glob(self.checkpoint_prefix+"*")) > (self.max_to_keep*3): # 3 files for each checkpoint are saved
+            old_ckpt = sorted(glob(self.checkpoint_prefix+"*"))[0]
+            os.remove(old_ckpt)
+          self.checkpoint.save(file_prefix = self.checkpoint_prefix)
           
         if self.losses.generator.epoch_loss[-1] < minimum_loss:
           if (epoch-early_stop_count) > self.early_stop_count:
@@ -396,10 +412,18 @@ class DCGAN(object):
             break
           early_stop_count=idx
           minimum_loss = self.losses.generator.epoch_loss[-1]
-          tf.saved_model.save(self.generator_model, self.checkpoint_best_gen)
-          tf.saved_model.save(self.discriminator_model, self.checkpoint_best_dis)
-      return
+          self.checkpoint.save(file_prefix = self.checkpoint_best_model)
+          # tf.saved_model.save(self.generator_model, self.checkpoint_best_gen)
+          # tf.saved_model.save(self.discriminator_model, self.checkpoint_best_dis)
+      # return
     logging.info("Training Completed!!!!")
+    with open(self.image_io_json, "w") as ff:
+      json.dump({
+        "input_height_width": self.input_height,
+        "output_height_width": self.output_height,
+        "channel": self.c_dim
+      }, ff)
+
   def discriminator_v1(self, image, y=None, reuse=False):
     with tf.variable_scope("discriminator") as scope:
       if reuse:
@@ -540,33 +564,33 @@ class DCGAN(object):
     model.add(tf.keras.layers.ReLU())
 
     model.add(layers.Reshape((s_h16, s_w16, self.gf_dim * 8)))
-    assert model.output_shape == (None, s_h16, s_w16, self.gf_dim * 8)  # Note: None is the batch size
+    assert model.output_shape == (None, s_h16, s_w16, self.gf_dim * 8), "Shape mismatch, use input shape which is 2^x e.g. 32, 64, 128 etc."  # Note: None is the batch size
 
     model.add(layers.Conv2DTranspose(self.gf_dim*4, (5, 5), strides=(2, 2), padding='same', use_bias=True,
                                      kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02, seed=None),
                                      bias_initializer=tf.keras.initializers.Constant(value=0),))
-    assert model.output_shape == (None, s_h8, s_w8, self.gf_dim*4)
+    assert model.output_shape == (None, s_h8, s_w8, self.gf_dim*4), "Shape mismatch, use input shape which is 2^x e.g. 32, 64, 128 etc."
     model.add(layers.BatchNormalization())
     model.add(layers.ReLU())
 
     model.add(layers.Conv2DTranspose(self.gf_dim*2, (5, 5), strides=(2, 2), padding='same', use_bias=True,
                                      kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02, seed=None),
                                      bias_initializer=tf.keras.initializers.Constant(value=0),))
-    assert model.output_shape == (None, s_h4, s_w4, self.gf_dim*2)
+    assert model.output_shape == (None, s_h4, s_w4, self.gf_dim*2), "Shape mismatch, use input shape which is 2^x e.g. 32, 64, 128 etc."
     model.add(layers.BatchNormalization())
     model.add(layers.ReLU())
 
     model.add(layers.Conv2DTranspose(self.gf_dim, (5, 5), strides=(2, 2), padding='same', use_bias=True,
                                      kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02, seed=None),
                                      bias_initializer=tf.keras.initializers.Constant(value=0),))
-    assert model.output_shape == (None, s_h2, s_w2, self.gf_dim)
+    assert model.output_shape == (None, s_h2, s_w2, self.gf_dim), "Shape mismatch, use input shape which is 2^x e.g. 32, 64, 128 etc."
     model.add(layers.BatchNormalization())
     model.add(layers.LeakyReLU())
 
     model.add(layers.Conv2DTranspose(self.c_dim, (5, 5), strides=(2, 2), padding='same', use_bias=True, activation='tanh',
                                      kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02, seed=None),
                                      bias_initializer=tf.keras.initializers.Constant(value=0),))
-    assert model.output_shape == (None, s_h, s_w, self.c_dim)
+    assert model.output_shape == (None, s_h, s_w, self.c_dim), "Shape mismatch, use input shape which is 2^x e.g. 32, 64, 128 etc."
 
     return model
     
@@ -607,6 +631,7 @@ class DCGAN(object):
   def load_builtin_dataset(self):
     logging.info("Loading built-in dataset, input_height and input_width will be reset")
     (train_images, _), (_, _) = getattr(tf.keras.datasets, self.dataset_name).load_data()
+    if train_images.shape[1] < 32: train_images = tf.pad(train_images, [[0,0], [2,2], [2,2]]).numpy()
     self.input_height = self.input_width = train_images[0].shape[0]
     if train_images[0].shape[-1] == 3: # either shape will be HxW or HxWx3
       self.c_dim = 3
@@ -690,7 +715,7 @@ class DCGAN(object):
     return gen_loss, disc_loss
 
 
-  def generate_and_save_images(self, model, epoch, test_input,):
+  def generate_and_save_images(self, model, epoch, test_input, draw_loss_graph=True):
     predictions = model(test_input, training=False)
 
     fig = plt.figure(figsize=(4, 4))
@@ -704,12 +729,12 @@ class DCGAN(object):
         plt.subplot(4, 4, i+1)
         plt.imshow(predictions[i, :, :, 0] * 127.5 + 127.5, cmap=cmap_)
         plt.axis('off')
-
     plt.savefig(os.path.join(self.sample_dir, f'image_at_{epoch}.png'))
-    plt.show()
+    save_images(predictions, (self.output_height, self.output_width), os.path.join(self.sample_dir, "big_tiff_image.tiff"))
+    # plt.show()
 
-    if self.train:
-      fig = plt.figure(figsize=(4, 4))
+    if draw_loss_graph:
+      fig = plt.figure(figsize=(12, 8))
       plt.plot(self.losses.discriminator.epoch_loss, label="Discriminator Loss", linewidth=2, marker="*")
       plt.plot(self.losses.generator.epoch_loss, label="Generator Loss", linewidth=2, marker="*")
       plt.legend()
@@ -719,16 +744,21 @@ class DCGAN(object):
   def load_and_generate_images(self, args):
     logging.info(" [*] Reading checkpoints... %s" % args.checkpoint_dir)
     try:
-      imported = tf.saved_model.load(args.checkpoint_dir)
-      self.generator_model = imported.signature["serving_default"]
-      
-      z = tf.random.normal([args.generate_test_images, self.z_dim])
-      self.generate_and_save_images(self.generator_model, "test", z)
-      return True
+      if args.load_best_model_only: 
+        self.checkpoint.restore(tf.train.latest_checkpoint(self.checkpoint_best_model))
+        logging.info("Loaded best model from %s" % args.checkpoint_dir)
+        # return True
+      else:
+        self.checkpoint.restore(tf.train.latest_checkpoint(self.checkpoint_dir))
+        logging.info("Loaded latest model from %s" % args.checkpoint_dir)
+        # return True
     except Exception as e:
-      logging.info(" [*] Failed to find checkpoint")
-      logging.info(e)
-      return False
+      logging.info(f" [*] Failed to find checkpoint at {self.checkpoint_best_gen}")
+      raise Exception(e)
+      # return False
+    z = tf.random.normal([args.generate_test_images, self.z_dim])
+    self.generate_and_save_images(self.generator_model, "test", z, draw_loss_graph=False)
+    return True
   
   
   # def sampler(self, z, y=None):

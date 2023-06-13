@@ -1,14 +1,22 @@
 from __future__ import division
 from __future__ import print_function
 
+import os
+import time
+import json
+import math
+import numpy as np
+import tensorflow as tf
+from glob import glob
+from PIL import Image
+
 import logging
 from tqdm import trange
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 import matplotlib.pyplot as plt
 
-from ops import *
-from utils import save_images
+from utils import save_images, transform
 
 
 def conv_out_size_same(size, stride):

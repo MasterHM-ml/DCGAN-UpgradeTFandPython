@@ -28,17 +28,18 @@
 # else:
 #     raise "input_height and input_width must be either 32 or even divisible of 32 e.g. 64, 128, 256, 512 etc."
 
-import numpy as np
-import tensorflow as tf
-from tqdm import trange
+# import numpy as np
+# import tensorflow as tf
+# from tqdm import trange
 from PIL import Image
-(train_images, _), (_, _) = getattr(tf.keras.datasets, "mnist").load_data()
-# for indexer in trange(train_images.shape[0]):
-#     train_images[indexer] = np.array(Image.fromarray(train_images[indexer]).resize((32,32)))
-train_images = tf.pad(train_images, [[0,0], [2,2], [2,2]]).numpy()
+# (train_images, _), (_, _) = getattr(tf.keras.datasets, "mnist").load_data()
+# # for indexer in trange(train_images.shape[0]):
+# #     train_images[indexer] = np.array(Image.fromarray(train_images[indexer]).resize((32,32)))
+# train_images = tf.pad(train_images, [[0,0], [2,2], [2,2]]).numpy()
 
 
-print(type(train_images))
+# print(type(train_images))
+print(Image.open("/home/master/hm.jpg").size == (407, 914))
 
 
 

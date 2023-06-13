@@ -20,7 +20,8 @@
       "program": "main.py",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "args": ["--epoch", "1", "--dataset", "fashion_mnist", "--output-height", "32", "--checkpoint-dir", "checkpoints", "--crop", "false", ]
+      // "args": ["--epoch", "1", "--dataset", "fashion_mnist", "--output-height", "32", "--checkpoint-dir", "checkpoints", "--crop", "false", ]
+      "args": ["--dataset", "cifar10", "--train", "True", "--z-dim", "100", "--early-stop-count", "30", "--batch-size", "64", "--learning-rate", "0.001", "--beta1", "0.5", "--epoch", "1"]
     }
   ]
 }

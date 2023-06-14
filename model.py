@@ -191,10 +191,13 @@ class DCGAN(object):
                     if len(glob(self.checkpoint_prefix + "*")) > (
                             self.max_to_keep * 3):  # 3 files for each checkpoint are saved
                         os.remove(self.checkpoint_prefix)
+                        home_dir = os.getcwd()
+                        os.chdir(self.checkpoint_dir)
                         list_old_ckpt = glob(self.checkpoint_prefix + "*")
                         list_old_ckpt = list_old_ckpt.sort(key= lambda x: int(x[11:].split(".")[0]))
                         os.remove(list_old_ckpt[0])
                         os.remove(list_old_ckpt[1])
+                        os.chdir(home_dir)
                     self.checkpoint.save(file_prefix=self.checkpoint_prefix)
 
                 if (epoch - early_stop_count_tracker) > self.early_stop_count:

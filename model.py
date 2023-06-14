@@ -167,7 +167,7 @@ class DCGAN(object):
                     self.losses.discriminator.running_loss.append(tf.reduce_mean(dl).numpy().item())
                     self.losses.generator.running_loss.append(tf.reduce_mean(gl).numpy().item())
                     if np.mod(idx, config.logging_frequency) == 0:
-                        logging.info("[Epoch:[%2d/%2d] [Batch# [%4d/%4d]] time: %4.4f, d_loss: %.8f, g_loss: %.8f"
+                        logging.info("[Epoch: %2d/%2d] [Batch: %4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f"
                                      % (epoch + 1, config.epoch, idx + 1, self.num_of_batches * self.batch_size,
                                         time.time() - start_time,
                                         np.mean(self.losses.discriminator.running_loss).item(),
@@ -180,7 +180,7 @@ class DCGAN(object):
                 self.losses.discriminator.epoch_loss.append(np.mean(self.losses.discriminator.running_loss).item())
                 self.losses.generator.running_loss.clear()
                 self.losses.discriminator.running_loss.clear()
-                logging.info("[Epoch:[%2d/%2d] time: %4.4f, d_loss: %.8f, g_loss: %.8f"
+                logging.info("[Epoch: %2d/%2d] time: %4.4f, d_loss: %.8f, g_loss: %.8f"
                              % (epoch + 1, config.epoch,
                                 time.time() - start_time, self.losses.discriminator.epoch_loss[-1],
                                 self.losses.generator.epoch_loss[-1]))
@@ -190,15 +190,18 @@ class DCGAN(object):
                 if np.mod(epoch, config.ckpt_freq) == 0:
                     if len(glob(self.checkpoint_prefix + "*")) > (
                             self.max_to_keep * 3):  # 3 files for each checkpoint are saved
-                        old_ckpt = sorted(glob(self.checkpoint_prefix + "*"))[0]
-                        os.remove(old_ckpt)
+                        os.remove(self.checkpoint_prefix)
+                        list_old_ckpt = glob(self.checkpoint_prefix + "*")
+                        list_old_ckpt = list_old_ckpt.sort(key= lambda x: int(x[11:].split(".")[0]))
+                        os.remove(list_old_ckpt[0])
+                        os.remove(list_old_ckpt[1])
                     self.checkpoint.save(file_prefix=self.checkpoint_prefix)
 
                 if self.losses.generator.epoch_loss[-1] < minimum_loss:
                     if (epoch - early_stop_count) > self.early_stop_count:
                         logging.warning("QUIT TRAINING - Early stopping count reached. %d", self.early_stop_count)
                         break
-                    early_stop_count = idx
+                    early_stop_count = epoch
                     minimum_loss = self.losses.generator.epoch_loss[-1]
                     self.checkpoint.save(file_prefix=self.checkpoint_best_model)
                     # tf.saved_model.save(self.generator_model, self.checkpoint_best_gen)

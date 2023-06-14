@@ -3,6 +3,7 @@ Some codes from https://github.com/Newmu/dcgan_code
 """
 from __future__ import division
 import math
+import logging
 import random
 import itertools
 import numpy as np
@@ -156,9 +157,12 @@ def visualize(generator_model, config, option, sample_dir):
             for kdx, z in enumerate(z_sample): z[idx] = values[kdx]
 
             image_set.append(generator_model(z_sample, training=False))
+            if image_set[0].shape[0] != 3:
+                logging.info("Cannot generate gif for images with single channel")
+                return
             make_gif(image_set[-1], os.path.join(sample_dir, 'test_gif_%s.gif' % idx))
 
         new_image_set = [merge(np.array([images[idx] for images in image_set]), [10, 10])
-                         for idx in itertools.chain(range(64), range(63, -1, -1))]
+                         for idx in itertools.chain(range(config.batch_size), range(config.batch_size-1, -1, -1))]
         _ = [os.remove(gifs) for gifs in glob(os.path.join(sample_dir, '*.gif'))]
         make_gif(new_image_set, os.path.join(sample_dir, 'test_gif_merged.gif'), duration=8)

@@ -114,8 +114,9 @@ class DCGAN(object):
     def build_model(self):
         if not self.do_training:
             if len(glob((os.path.join(self.checkpoint_dir, "checkpoint*")))) == 0:
-                raise ValueError("Can't find checkpoints in %s. Did you even trained model on %s?" % (
-                    self.checkpoint_dir, self.dataset_name))
+                raise ValueError("Can't find checkpoints in %s. Did you even trained model on %s today?"
+                                 " Pass '--out-dir' from previous date e.g. ./out/cifar100_2023-06-13 if you want to generate images with older models" % (
+                    self.checkpoint_dir, self.dataset_name,))
             if not os.path.exists(self.image_io_json):
                 raise ValueError(
                     "Can't find crucial image_io data file under %s that was saved during training"
@@ -188,12 +189,11 @@ class DCGAN(object):
                 if np.mod(epoch, config.sample_freq) == 0:
                     self.generate_and_save_images(self.generator_model, epoch + 1, sample_z)
                 if np.mod(epoch, config.ckpt_freq) == 0:
-                    if len(glob(self.checkpoint_prefix + "*")) > (
-                            self.max_to_keep * 3):  # 3 files for each checkpoint are saved
+                    if len(glob(self.checkpoint_prefix + "*")) > (self.max_to_keep * 2):
                         os.remove(self.checkpoint_prefix)
                         home_dir = os.getcwd()
                         os.chdir(self.checkpoint_dir)
-                        list_old_ckpt = glob(self.checkpoint_prefix + "*")
+                        list_old_ckpt = glob(self.checkpoint_prefix.split("/")[-1] + "*")
                         list_old_ckpt.sort(key= lambda x: int(x[11:].split(".")[0]))
                         os.remove(list_old_ckpt[0])
                         os.remove(list_old_ckpt[1])
@@ -411,7 +411,12 @@ class DCGAN(object):
 
     def generate_and_save_images(self, model, epoch, test_input, draw_loss_graph=True):
         predictions = model(test_input, training=False)
-
+        predictions = np.array(predictions.numpy()*255, dtype=np.uint8)
+        if (not draw_loss_graph):
+            if predictions.shape[-1]==3:
+                [Image.fromarray(predictions[i]).save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
+            else:
+                [Image.fromarray(np.squeeze(predictions[i]), "L").save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
         _ = plt.figure(figsize=(4, 4))
         if self.c_dim == 1:
             cmap_ = "gray"
@@ -421,7 +426,7 @@ class DCGAN(object):
             if i == 16:  # TODO fix it - subplots are 16 only, will output 16 images only
                 break
             plt.subplot(4, 4, i + 1)
-            plt.imshow(predictions[i, :, :, 0] * 127.5 + 127.5, cmap=cmap_)
+            plt.imshow(predictions[i], cmap=cmap_)
             plt.axis('off')
         plt.savefig(os.path.join(self.sample_dir, f'image_at_{epoch}.png'))
         plt.close()
@@ -450,5 +455,5 @@ class DCGAN(object):
             logging.info(f" [*] Failed to find checkpoint at {self.checkpoint_best_gen}")
             raise Exception(e)
         z = tf.random.normal([args.generate_test_images, self.z_dim])
-        self.generate_and_save_images(self.generator_model, "test", z, draw_loss_graph=False)
+        self.generate_and_save_images(self.generator_model, f"generated_{self.dataset_name}_", z, draw_loss_graph=False)
         return True

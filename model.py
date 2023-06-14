@@ -173,8 +173,8 @@ class DCGAN(object):
                                         np.mean(self.losses.discriminator.running_loss).item(),
                                         np.mean(self.losses.generator.running_loss).item()))
 
-                    if idx == 2:
-                        break
+                    # if idx == 2:
+                    #     break
 
                 self.losses.generator.epoch_loss.append(np.mean(self.losses.generator.running_loss).item())
                 self.losses.discriminator.epoch_loss.append(np.mean(self.losses.discriminator.running_loss).item())

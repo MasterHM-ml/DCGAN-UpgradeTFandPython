@@ -194,7 +194,7 @@ class DCGAN(object):
                         home_dir = os.getcwd()
                         os.chdir(self.checkpoint_dir)
                         list_old_ckpt = glob(self.checkpoint_prefix + "*")
-                        list_old_ckpt = list_old_ckpt.sort(key= lambda x: int(x[11:].split(".")[0]))
+                        list_old_ckpt.sort(key= lambda x: int(x[11:].split(".")[0]))
                         os.remove(list_old_ckpt[0])
                         os.remove(list_old_ckpt[1])
                         os.chdir(home_dir)

@@ -149,7 +149,7 @@ class DCGAN(object):
                                               discriminator_model=self.discriminator_model)
 
     def train(self, config):
-        early_stop_count = 0
+        early_stop_count_tracker = 0
         self.d_optim = tf.keras.optimizers.Adam(
             config.learning_rate)
         self.g_optim = tf.keras.optimizers.Adam(
@@ -197,15 +197,17 @@ class DCGAN(object):
                         os.remove(list_old_ckpt[1])
                     self.checkpoint.save(file_prefix=self.checkpoint_prefix)
 
-                if self.losses.generator.epoch_loss[-1] < minimum_loss:
-                    if (epoch - early_stop_count) > self.early_stop_count:
+                if (epoch - early_stop_count_tracker) > self.early_stop_count:
                         logging.warning("QUIT TRAINING - Early stopping count reached. %d", self.early_stop_count)
                         break
-                    early_stop_count = epoch
+                if self.losses.generator.epoch_loss[-1] < minimum_loss:
+                    early_stop_count_tracker = epoch
                     minimum_loss = self.losses.generator.epoch_loss[-1]
+                    _ = [os.remove(old_best) for old_best in glob(f"{self.checkpoint_best_model}*")]
                     self.checkpoint.save(file_prefix=self.checkpoint_best_model)
                     # tf.saved_model.save(self.generator_model, self.checkpoint_best_gen)
                     # tf.saved_model.save(self.discriminator_model, self.checkpoint_best_dis)
+                
         logging.info("Training Completed!!!!")
         with open(self.image_io_json, "w") as ff:
             json.dump({
@@ -419,6 +421,7 @@ class DCGAN(object):
             plt.imshow(predictions[i, :, :, 0] * 127.5 + 127.5, cmap=cmap_)
             plt.axis('off')
         plt.savefig(os.path.join(self.sample_dir, f'image_at_{epoch}.png'))
+        plt.close()
         save_images(predictions, (self.output_height, self.output_width),
                     os.path.join(self.sample_dir, "big_tiff_image.tiff"))
         # plt.show()
@@ -429,6 +432,7 @@ class DCGAN(object):
             plt.plot(self.losses.generator.epoch_loss, label="Generator Loss", linewidth=2, marker="*")
             plt.legend()
             plt.savefig(os.path.join(self.sample_dir, "losses.png"))
+            plt.close()
 
     def load_and_generate_images(self, args):
         logging.info(" [*] Reading checkpoints... %s" % args.checkpoint_dir)

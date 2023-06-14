@@ -60,7 +60,7 @@ For saving best models, checkpoints, output samples during training and loss gra
 
 1. `--z-dim` e.g. `100` - noise length to seed generator for image generation
 2. `--generate-test-image` e.g. `100` - Images to generate during testing
-3. `--visualize` e.g. `True` to make a gif of generated images
+3. `--visualize` e.g. `True` to make a gif of generated images - works only for RGB images
 4. `--load-best-model-only` e.g. `True` - if True, during testing, load best model from `--checkpoint-dir/best_model*` other wise load latest model from `--checkpoint-dir/checkpoint*`.
 5. `--train` e.g. `True` - True for training, False for testing
 6. `--early-stop-count` e.g. `20` - number of epoch to wait to quit training if model is not improving learning
@@ -72,18 +72,22 @@ For saving best models, checkpoints, output samples during training and loss gra
 
 To train a model with built-in datasets:
 
-    $ python main.py --dataset mnist --train
-    $ python main.py --dataset cifar100 --train --z-dim 100 --early-stop-count 30 --batch-size 64 --learning-rate 0.001 --beta1 0.5
+    $ python main.py --dataset mnist --train True
+    $ python main.py --dataset cifar100 --train True --z-dim 100 --early-stop-count 30 --batch-size 64 --learning-rate 0.001 --beta1 0.5
 
 To train a model with custom self-downloaded datasets:
 
-    $ python main.py --dataset celebA --data-dir /home/master/data --input_fname_pattern= "*_cropped.png" --train
-    $ python main.py --dataset celebA --data-dir /home/user-name/data --out-dir /home/user-name/Documents --sample-dir results-during-training --checkpoint-dir saved-models --checkpoint-prefix checkpoint  --train
+    $ python main.py --dataset celebA --data-dir /home/master/data --input_fname_pattern= "*_cropped.png" --train True
+    $ python main.py --dataset celebA --data-dir /home/user-name/data --out-dir /home/user-name/Documents --sample-dir results-during-training --checkpoint-dir saved-models --checkpoint-prefix checkpoint  --train True
 
 To test with an existing model:
 
-    $ python main.py --dataset mnist --load-best-model-only --visualize
-    $ python main.py --dataset celebA --crop --generate-test-images 1000
+    $ python main.py --dataset mnist --load-best-model-only 
+    $ python main.py --dataset celebA --crop True --generate-test-images 1000 --visualize True
+
+You might need to explicitly add nested directory if you want to load older model to generate images. e.g.
+
+    $ python main.py --dataset cifar10 --load-best-model-only True --visualize True --out-dir ./out/cifar10_2023-06-01 --checkpoint-dir checkpoint --checkpoint-prefix checkpoint 
 
 ## Results
 

@@ -1,4 +1,5 @@
 import os
+import shutil
 import json
 import time
 import datetime
@@ -29,7 +30,7 @@ parser.add_argument("--dataset", type=str, default="mnist", help="The name of da
 parser.add_argument("--input-fname-pattern", type=str, default="*.jpg",
                     help="Glob pattern of filename of input images [*]")
 parser.add_argument("--data-dir", type=str, default="./data", help="path to datasets [e.g. $HOME/data]")
-parser.add_argument("--out-dir", type=str, default="./out", help="Root directory for outputs [e.g. $HOME/out]")
+parser.add_argument("--out-dir", type=str, default="./out", help="Root directory for outputs. During testing, add the nested dataset name as well [e.g. $HOME/out]")
 parser.add_argument("--checkpoint-dir", type=str, default="checkpoint",
                     help="Folder (under out_root_dir/dataset+current date/) to save checkpoints e.g. "
                          "out/mnist_2023-06-11/ here]")
@@ -45,7 +46,7 @@ parser.add_argument("--load-best-model-only", type=bool, default=False,
                     help="If True, during testing,loading best model under checkpoint-dir/best_model/*, if False, "
                          "load latest model from checkpoint-dir [True]")
 parser.add_argument("--crop", type=bool, default=False, help="True for training, False for testing [False]")
-parser.add_argument("--visualize", type=bool, default=False, help="True for visualizing, False for nothing [False]")
+parser.add_argument("--visualize", type=bool, default=False, help=" (only for RGB) True for visualizing - create a gif of generated images")
 parser.add_argument("--max-to-keep", type=int, default=3, help="maximum number of checkpoints to keep")
 parser.add_argument("--sample-freq", type=int, default=1, help="sample every this many epochs")
 parser.add_argument("--ckpt-freq", type=int, default=1, help="save checkpoint every this many epochs")
@@ -98,10 +99,21 @@ def main(args):
                         and {args.input_width} as input")
 
     if not os.path.exists(args.out_dir): os.makedirs(args.out_dir)
-    args.out_dir = os.path.join(args.out_dir, f"{args.dataset}_{str(datetime.date.today())}")
-    args.checkpoint_dir = os.path.join(args.out_dir, args.checkpoint_dir)
+    if args.train:
+        args.out_dir = os.path.join(args.out_dir, f"{args.dataset}_{str(datetime.date.today())}")
+        args.checkpoint_dir = os.path.join(args.out_dir, args.checkpoint_dir)
+        if os.path.exists(args.checkpoint_dir):
+            shutil.rmtree(args.checkpoint_dir)
+    elif os.path.exists(os.path.join(args.out_dir, f"{args.dataset}_{str(datetime.date.today())}")):
+        args.out_dir = os.path.join(args.out_dir, f"{args.dataset}_{str(datetime.date.today())}")
+        args.checkpoint_dir = os.path.join(args.out_dir, args.checkpoint_dir)
+    else:
+        args.checkpoint_dir = os.path.join(args.out_dir, args.checkpoint_dir)
     args.checkpoint_prefix = os.path.join(args.checkpoint_dir, args.checkpoint_prefix)
     args.sample_dir = os.path.join(args.out_dir, f"{args.sample_dir}_{str(time.strftime('%Y-%m-%d %H:%M:%S'))}")
+
+    logging.info(f"out-dir: {args.out_dir} - checkpoint-dir: {args.checkpoint_dir}"
+                 f" - checkpoint-prefix: {args.checkpoint_prefix} - sample-dir: {args.sample_dir}")
 
     if not os.path.exists(args.out_dir): os.makedirs(args.out_dir)
     if not os.path.exists(args.checkpoint_dir): os.makedirs(args.checkpoint_dir)

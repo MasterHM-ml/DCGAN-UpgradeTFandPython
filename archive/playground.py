@@ -1,3 +1,21 @@
+# import re
+# import os
+# from glob import glob
+
+# [os.mkdir("checkpoint-%d.data-dir" % indexer) for indexer in range(100)]
+# [os.rmdir("checkpoint-%d.data-dir" % indexer) for indexer in range(100)]
+# x = glob("checkpoint-*")
+# # x.sort(key=lambda x: int(re.search(r'\d+', x).group()))
+# x.sort(key=lambda x: int(x[11:].split(".")[0]))
+
+# print(x)
+
+
+
+
+
+
+
 # import os
 # import json
 

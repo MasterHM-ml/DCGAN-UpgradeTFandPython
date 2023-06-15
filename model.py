@@ -376,7 +376,7 @@ class DCGAN(object):
 
 
     def load_custom_dataset(self):
-        for batch_index in range(ceil(int(self.num_of_images_in_dataset/self.batch_size))):
+        for batch_index in range(floor(int(self.num_of_images_in_dataset/self.batch_size))):
             image_list_for_batch = self.path_to_images[batch_index*self.batch_size:(batch_index+1)*self.batch_size]
 
             if self.c_dim == 1:

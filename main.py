@@ -19,7 +19,7 @@ parser.add_argument("--epoch", type=int, default=200, help="Epoch to train [200]
 parser.add_argument("--learning-rate", type=float, default=0.0002, help="Learning rate of for adam [0.0002]")
 parser.add_argument("--beta1", type=float, default=0.5, help="Momentum term of adam [0.5]")
 parser.add_argument("--batch-size", type=int, default=64, help="The size of batch images [64]")
-parser.add_argument("--c-dim", type=int, default=None,
+parser.add_argument("--c-dim", type=int, default=3,
                     help="The channel of images to use. 3 for RGB and 1 for grayscale")
 parser.add_argument("--input-height", type=int, default=96,
                     help="The size of image to use (will be center cropped). [108]")

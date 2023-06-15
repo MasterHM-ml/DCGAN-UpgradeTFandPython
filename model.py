@@ -110,6 +110,7 @@ class DCGAN(object):
                 self.data_X, self.data_Y = self.load_builtin_dataset()
             else:
                 # self.data_X, self.data_Y = self.load_custom_dataset()
+                self.load_metadata()
                 self.data_yielder = self.load_custom_dataset()
 
         self.build_model()
@@ -346,7 +347,7 @@ class DCGAN(object):
         test_dataset = tf.data.Dataset.from_tensor_slices(test_dataset).shuffle(self.buffer_size).batch(self.batch_size)
         return train_dataset, test_dataset
 
-    def load_custom_dataset(self):
+    def load_metadata(self,):
         # data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
         # logging.info("loading custom data from %s." % data_path)
         if self.c_dim is None:
@@ -357,20 +358,25 @@ class DCGAN(object):
             "Please make sure all images are either RGB (3 channels) or grayscale (1 channels). Got argument 'c_dim'=%d"
             % self.c_dim)
         # path_to_images = glob(data_path)
-        path_to_images = pd.read_csv("/kaggle/working/images.csv")["image_id"].tolist()
-        if len(path_to_images) == 0: raise Exception("[!] No data found in '" + data_path + "'")
-        if len(path_to_images) < self.batch_size: raise Exception(
+        # self.path_to_images = pd.read_csv("images.csv")["image_id"].tolist()
+        self.path_to_images = pd.read_csv("/kaggle/working/images.csv")["image_id"].tolist()
+        if len(self.path_to_images) == 0: raise Exception("[!] No data found in '" + data_path + "'")
+        if len(self.path_to_images) < self.batch_size: raise Exception(
             "[!] Entire dataset size is less than the configured batch_size")
 
-        if Image.open(path_to_images[0]).size != (self.input_width, self.input_height):
+        if Image.open(self.path_to_images[0]).size != (self.input_width, self.input_height):
             logging.warning("[!] Image dim, and provided input_height, input_width are not same.")
         
-        self.num_of_images_in_dataset = len(path_to_images)
-        print("number of images in dataset are %d " % self.num_of_images_in_dataset)
-        print("batch size of dataset is %d " % self.batch_size)
-        self.buffer_size = len(path_to_images)
+        self.num_of_images_in_dataset = len(self.path_to_images)
+        # print("number of images in dataset are %d " % self.num_of_images_in_dataset)
+        # print("batch size of dataset is %d " % self.batch_size)
+        self.buffer_size = len(self.path_to_images)
+
+
+
+    def load_custom_dataset(self):
         for batch_index in range(floor(int(self.num_of_images_in_dataset/self.batch_size))):
-            image_list_for_batch = path_to_images[batch_index*self.batch_size:(batch_index+1)*self.batch_size]
+            image_list_for_batch = self.path_to_images[batch_index*self.batch_size:(batch_index+1)*self.batch_size]
             if self.c_dim == 1:
                 data_x_np = np.stack([transform(np.array(Image.open(x).convert('L')),
                                                 self.input_height, self.input_width,

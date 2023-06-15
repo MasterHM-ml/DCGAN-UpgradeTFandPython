@@ -181,7 +181,7 @@ class DCGAN(object):
                     self.losses.generator.running_loss.append(tf.reduce_mean(gl).numpy().item())
                     if np.mod(idx, config.logging_frequency) == 0:
                         logging.info("[Epoch: %2d/%2d] [Batch: %4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f"
-                                     % (epoch + 1, config.epoch, batch_tracker, self.num_of_batches * self.batch_size,
+                                     % (epoch + 1, config.epoch, idx, self.num_of_batches,
                                         time.time() - start_time,
                                         np.mean(self.losses.discriminator.running_loss).item(),
                                         np.mean(self.losses.generator.running_loss).item()))

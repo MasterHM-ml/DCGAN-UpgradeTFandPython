@@ -366,6 +366,8 @@ class DCGAN(object):
             logging.warning("[!] Image dim, and provided input_height, input_width are not same.")
         
         self.num_of_images_in_dataset = len(path_to_images)
+        print("number of images in dataset are %d " % self.num_of_images_in_dataset)
+        print("batch size of dataset is %d " % self.batch_size)
         self.buffer_size = len(path_to_images)
         for batch_index in range(floor(int(self.num_of_images_in_dataset/self.batch_size))):
             image_list_for_batch = path_to_images[batch_index*self.batch_size:(batch_index+1)*self.batch_size]

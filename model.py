@@ -5,6 +5,7 @@ import os
 import time
 import json
 import math
+from math import ceil, floor
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -108,7 +109,8 @@ class DCGAN(object):
             if self.dataset_name in ["mnist", "fashion_mnist", "cifar10", "cifar100"]:
                 self.data_X, self.data_Y = self.load_builtin_dataset()
             else:
-                self.data_X, self.data_Y = self.load_custom_dataset()
+                # self.data_X, self.data_Y = self.load_custom_dataset()
+                self.data_yielder = self.load_custom_dataset()
 
         self.build_model()
 
@@ -171,7 +173,7 @@ class DCGAN(object):
             minimum_loss = np.Inf
             batch_tracker = 0
             for epoch in trange(config.epoch):
-                for idx, batch_images in enumerate(self.data_X):
+                for idx, batch_images, _ in enumerate(self.data_yielder):
                     batch_tracker+=1
                     gl, dl = self.train_step(batch_images)
                     self.losses.discriminator.running_loss.append(tf.reduce_mean(dl).numpy().item())
@@ -362,24 +364,28 @@ class DCGAN(object):
 
         if Image.open(path_to_images[0]).size != (self.input_width, self.input_height):
             logging.warning("[!] Image dim, and provided input_height, input_width are not same.")
-        if self.c_dim == 1:
-            data_x_np = np.stack([transform(np.array(Image.open(x).convert('L')),
-                                            self.input_height, self.input_width,
-                                            self.output_height, self.output_width, self.crop)
-                                  for x in path_to_images])
-        elif self.c_dim == 3:
-            data_x_np = np.stack([transform(np.array(Image.open(x).convert('RGB')),
-                                            self.input_height, self.input_width,
-                                            self.output_height, self.output_width, self.crop)
-                                  for x in path_to_images])
-        else:
-            raise Exception("[!] Unknown color dimension. Got argument 'c_dim'=%d" % self.c_dim)
+        
         self.num_of_images_in_dataset = len(path_to_images)
-        self.buffer_size = data_x_np.shape[0]
-        train_dataset_y = tf.data.Dataset.from_tensor_slices(np.ones(data_x_np.shape[0])).shuffle(
-            self.buffer_size).batch(self.batch_size)
-        train_dataset_x = tf.data.Dataset.from_tensor_slices(data_x_np).shuffle(self.buffer_size).batch(self.batch_size)
-        return train_dataset_x, train_dataset_y
+        self.buffer_size = len(path_to_images)
+        for batch_index in range(floor(int(self.num_of_images_in_dataset/self.batch_size))):
+            image_list_for_batch = path_to_images[batch_index*self.batch_size:(batch_index+1)*self.batch_size]
+            if self.c_dim == 1:
+                data_x_np = np.stack([transform(np.array(Image.open(x).convert('L')),
+                                                self.input_height, self.input_width,
+                                                self.output_height, self.output_width, self.crop)
+                                    for x in image_list_for_batch])
+            elif self.c_dim == 3:
+                data_x_np = np.stack([transform(np.array(Image.open(x).convert('RGB')),
+                                                self.input_height, self.input_width,
+                                                self.output_height, self.output_width, self.crop)
+                                    for x in image_list_for_batch])
+            else:
+                raise Exception("[!] Unknown color dimension. Got argument 'c_dim'=%d" % self.c_dim)
+            train_dataset_y = tf.data.Dataset.from_tensor_slices(np.ones(data_x_np.shape[0])).shuffle(
+                self.buffer_size).batch(self.batch_size)
+            train_dataset_x = tf.data.Dataset.from_tensor_slices(data_x_np).shuffle(self.buffer_size).batch(self.batch_size)
+            # return train_dataset_x, train_dataset_y
+            yield train_dataset_x, train_dataset_y
 
     def generator_loss(self, fake_output):
         return self.cross_entropy(tf.ones_like(fake_output), fake_output)

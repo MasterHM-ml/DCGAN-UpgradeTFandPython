@@ -436,8 +436,8 @@ class DCGAN(object):
                 [Image.fromarray(predictions[i]).save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
             else:
                 [Image.fromarray(np.squeeze(predictions[i]), "L").save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
-            save_images(predictions, (self.output_height, self.output_width),
-                        os.path.join(self.sample_dir, "big_tiff_image.tiff"))
+            # save_images(predictions, (self.output_height, self.output_width),
+            #             os.path.join(self.sample_dir, "big_tiff_image.tiff"))
         _ = plt.figure(figsize=(4, 4))
         if self.c_dim == 1:
             cmap_ = "gray"

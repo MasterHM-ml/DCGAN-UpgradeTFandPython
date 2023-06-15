@@ -160,16 +160,24 @@ class DCGAN(object):
 
         start_time = time.time()
         # TODO resume training
+        with open(self.image_io_json, "w") as ff:
+            json.dump({
+                "input_height_width": self.input_height,
+                "output_height_width": self.output_height,
+                "channel": self.c_dim
+            }, ff)
         with logging_redirect_tqdm():
             minimum_loss = np.Inf
+            batch_tracker = 0
             for epoch in trange(config.epoch):
                 for idx, batch_images in enumerate(self.data_X):
+                    batch_tracker+=1
                     gl, dl = self.train_step(batch_images)
                     self.losses.discriminator.running_loss.append(tf.reduce_mean(dl).numpy().item())
                     self.losses.generator.running_loss.append(tf.reduce_mean(gl).numpy().item())
                     if np.mod(idx, config.logging_frequency) == 0:
                         logging.info("[Epoch: %2d/%2d] [Batch: %4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f"
-                                     % (epoch + 1, config.epoch, idx + 1, self.num_of_batches * self.batch_size,
+                                     % (epoch + 1, config.epoch, batch_tracker, self.num_of_batches * self.batch_size,
                                         time.time() - start_time,
                                         np.mean(self.losses.discriminator.running_loss).item(),
                                         np.mean(self.losses.generator.running_loss).item()))
@@ -212,12 +220,6 @@ class DCGAN(object):
                     # tf.saved_model.save(self.discriminator_model, self.checkpoint_best_dis)
                 
         logging.info("Training Completed!!!!")
-        with open(self.image_io_json, "w") as ff:
-            json.dump({
-                "input_height_width": self.input_height,
-                "output_height_width": self.output_height,
-                "channel": self.c_dim
-            }, ff)
 
     def discriminator(self, image_dims, ):
         model = tf.keras.Sequential()
@@ -332,7 +334,8 @@ class DCGAN(object):
         self.num_of_images_in_dataset = train_images.shape[0]
         train_images = train_images.reshape(train_images.shape[0], self.input_width, self.input_height,
                                             self.c_dim).astype('float32')
-        train_images = (train_images - 127.5) / 127.5  # Normalize the images to [-1, 1]
+        # train_images = (train_images - 127.5) / 127.5  # Normalize the images to [-1, 1]
+        train_images = train_images / 255  # Normalize the images to [-1, 1]
         self.buffer_size = train_images.shape[0]
         test_dataset = np.ones(train_images.shape[0])
         train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(self.buffer_size).batch(
@@ -417,6 +420,8 @@ class DCGAN(object):
                 [Image.fromarray(predictions[i]).save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
             else:
                 [Image.fromarray(np.squeeze(predictions[i]), "L").save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
+            save_images(predictions, (self.output_height, self.output_width),
+                        os.path.join(self.sample_dir, "big_tiff_image.tiff"))
         _ = plt.figure(figsize=(4, 4))
         if self.c_dim == 1:
             cmap_ = "gray"
@@ -430,8 +435,6 @@ class DCGAN(object):
             plt.axis('off')
         plt.savefig(os.path.join(self.sample_dir, f'image_at_{epoch}.png'))
         plt.close()
-        save_images(predictions, (self.output_height, self.output_width),
-                    os.path.join(self.sample_dir, "big_tiff_image.tiff"))
         # plt.show()
 
         if draw_loss_graph:

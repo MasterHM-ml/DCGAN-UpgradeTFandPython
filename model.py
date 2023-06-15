@@ -3,6 +3,7 @@ from __future__ import print_function
 
 import os
 import time
+import cv2
 import json
 import math
 from math import ceil, floor
@@ -155,12 +156,24 @@ class DCGAN(object):
 
     def train(self, config):
         early_stop_count_tracker = 0
-        self.d_optim = tf.keras.optimizers.Adam(
-            config.learning_rate)
-        self.g_optim = tf.keras.optimizers.Adam(
-            config.learning_rate)
         sample_z = tf.random.normal([self.batch_size, self.z_dim])
         self.num_of_batches = self.num_of_images_in_dataset // self.batch_size
+        
+        g_lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(
+            config.g_learning_rate,
+            decay_steps=self.num_of_batches,
+            decay_rate=0.96,
+            staircase=True)
+        d_lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(
+            config.d_learning_rate,
+            decay_steps=self.num_of_batches,
+            decay_rate=0.8,
+            staircase=True)
+        self.d_optim = tf.keras.optimizers.Adam(
+            learning_rate=d_lr_scheduler
+        )
+        self.g_optim = tf.keras.optimizers.Adam(
+            learning_rate=g_lr_scheduler)
 
         start_time = time.time()
         # TODO resume training
@@ -433,6 +446,7 @@ class DCGAN(object):
     def generate_and_save_images(self, model, epoch, test_input, draw_loss_graph=True):
         predictions = model(test_input, training=False)
         predictions = np.array(predictions.numpy()*255, dtype=np.uint8)
+        [cv2.imwrite("epoch-%d-%d.jpg" % (epoch, indexxx), imggg) for indexxx, imggg in enumerate(predictions[:10])]
         if (not draw_loss_graph):
             if predictions.shape[-1]==3:
                 [Image.fromarray(predictions[i]).save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]

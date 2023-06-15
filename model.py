@@ -412,14 +412,14 @@ class DCGAN(object):
 
     def generate_and_save_images(self, model, epoch, test_input, draw_loss_graph=True):
         predictions = model(test_input, training=False)
-        predictions = np.array(predictions.numpy()*255, dtype=np.uint8)
-        if (not draw_loss_graph):
-            if predictions.shape[-1]==3:
-                [Image.fromarray(predictions[i]).save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
-            else:
-                [Image.fromarray(np.squeeze(predictions[i]), "L").save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
-            save_images(predictions, (self.output_height, self.output_width),
-                        os.path.join(self.sample_dir, "big_tiff_image.tiff"))
+        # predictions = np.array(predictions.numpy()*255, dtype=np.uint8)
+        # if (not draw_loss_graph):
+        #     if predictions.shape[-1]==3:
+        #         [Image.fromarray(predictions[i]).save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
+        #     else:
+        #         [Image.fromarray(np.squeeze(predictions[i]), "L").save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
+        #     save_images(predictions, (self.output_height, self.output_width),
+        #                 os.path.join(self.sample_dir, "big_tiff_image.tiff"))
         _ = plt.figure(figsize=(4, 4))
         if self.c_dim == 1:
             cmap_ = "gray"
@@ -429,7 +429,8 @@ class DCGAN(object):
             if i == 16:  # TODO fix it - subplots are 16 only, will output 16 images only
                 break
             plt.subplot(4, 4, i + 1)
-            plt.imshow(predictions[i], cmap=cmap_)
+            plt.imshow(predictions[i, :, :, 0] * 127.5 + 127.5, cmap=cmap_)
+            # plt.imshow(predictions[i], cmap=cmap_)
             plt.axis('off')
         plt.savefig(os.path.join(self.sample_dir, f'image_at_{epoch}.png'))
         plt.close()

@@ -355,7 +355,7 @@ class DCGAN(object):
             "Please make sure all images are either RGB (3 channels) or grayscale (1 channels). Got argument 'c_dim'=%d"
             % self.c_dim)
         # path_to_images = glob(data_path)
-        path_to_images = pd.read_csv(short_images_csv_path)["image_id"].tolist()
+        path_to_images = pd.read_csv("/kaggle/working/images.csv")["image_id"].tolist()
         if len(path_to_images) == 0: raise Exception("[!] No data found in '" + data_path + "'")
         if len(path_to_images) < self.batch_size: raise Exception(
             "[!] Entire dataset size is less than the configured batch_size")

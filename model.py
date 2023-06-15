@@ -158,6 +158,13 @@ class DCGAN(object):
         sample_z = tf.random.normal([self.batch_size, self.z_dim])
         self.num_of_batches = self.num_of_images_in_dataset // self.batch_size
 
+        with open(self.image_io_json, "w") as ff:
+            json.dump({
+                "input_height_width": self.input_height,
+                "output_height_width": self.output_height,
+                "channel": self.c_dim
+            }, ff)
+        
         start_time = time.time()
         # TODO resume training
         with logging_redirect_tqdm():
@@ -212,12 +219,6 @@ class DCGAN(object):
                     # tf.saved_model.save(self.discriminator_model, self.checkpoint_best_dis)
                 
         logging.info("Training Completed!!!!")
-        with open(self.image_io_json, "w") as ff:
-            json.dump({
-                "input_height_width": self.input_height,
-                "output_height_width": self.output_height,
-                "channel": self.c_dim
-            }, ff)
 
     def discriminator(self, image_dims, ):
         model = tf.keras.Sequential()

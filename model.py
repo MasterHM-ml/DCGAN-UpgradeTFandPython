@@ -174,9 +174,9 @@ class DCGAN(object):
             minimum_loss = np.Inf
             batch_tracker = 0
             for epoch in trange(config.epoch):
-                for idx, batch_images, _ in enumerate(self.data_yielder):
+                for idx, (batch_images, _) in enumerate(self.data_yielder):
                     batch_tracker+=1
-                    gl, dl = self.train_step(batch_images)
+                    gl, dl = self.train_step(batch_images.as_numpy_iterator().next())
                     self.losses.discriminator.running_loss.append(tf.reduce_mean(dl).numpy().item())
                     self.losses.generator.running_loss.append(tf.reduce_mean(gl).numpy().item())
                     if np.mod(idx, config.logging_frequency) == 0:
@@ -358,8 +358,8 @@ class DCGAN(object):
             "Please make sure all images are either RGB (3 channels) or grayscale (1 channels). Got argument 'c_dim'=%d"
             % self.c_dim)
         # path_to_images = glob(data_path)
-        # self.path_to_images = pd.read_csv("images.csv")["image_id"].tolist()
-        self.path_to_images = pd.read_csv("/kaggle/working/images.csv")["image_id"].tolist()
+        self.path_to_images = pd.read_csv("images.csv")["image_id"].tolist()
+        # self.path_to_images = pd.read_csv("/kaggle/working/images.csv")["image_id"].tolist()
         if len(self.path_to_images) == 0: raise Exception("[!] No data found in '" + data_path + "'")
         if len(self.path_to_images) < self.batch_size: raise Exception(
             "[!] Entire dataset size is less than the configured batch_size")

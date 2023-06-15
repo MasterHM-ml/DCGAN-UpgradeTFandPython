@@ -6,7 +6,6 @@ import time
 import json
 import math
 import numpy as np
-import pandas as pd
 import tensorflow as tf
 from glob import glob
 from PIL import Image
@@ -345,8 +344,8 @@ class DCGAN(object):
         return train_dataset, test_dataset
 
     def load_custom_dataset(self):
-        # data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
-        # logging.info("loading custom data from %s." % data_path)
+        data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
+        logging.info("loading custom data from %s." % data_path)
         if self.c_dim is None:
             raise ValueError(
                 "with custom data, c-dim argument is required. 1 if your data is grayscale or 3 if your dataset is "
@@ -354,8 +353,7 @@ class DCGAN(object):
         logging.warning(
             "Please make sure all images are either RGB (3 channels) or grayscale (1 channels). Got argument 'c_dim'=%d"
             % self.c_dim)
-        # path_to_images = glob(data_path)
-        path_to_images = pd.read_csv("/kaggle/working/images.csv")["image_id"].tolist()
+        path_to_images = glob(data_path)
         if len(path_to_images) == 0: raise Exception("[!] No data found in '" + data_path + "'")
         if len(path_to_images) < self.batch_size: raise Exception(
             "[!] Entire dataset size is less than the configured batch_size")

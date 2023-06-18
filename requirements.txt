@@ -1,0 +1,10 @@
+Flask==2.3.2
+matplotlib==3.7.1
+moviepy==1.0.3
+numpy==1.24.3
+Pillow==9.0.1
+Pillow==9.5.0
+Requests==2.31.0
+six==1.16.0
+tensorflow==2.13.0rc1
+tqdm==4.65.0

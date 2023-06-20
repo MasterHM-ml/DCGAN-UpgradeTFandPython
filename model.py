@@ -8,6 +8,8 @@ import math
 import numpy as np
 import tensorflow as tf
 from glob import glob
+
+import cv2
 from PIL import Image
 
 import logging
@@ -413,13 +415,19 @@ class DCGAN(object):
     def generate_and_save_images(self, model, epoch, test_input, draw_loss_graph=True):
         predictions = model(test_input, training=False)
         # predictions = np.array(predictions.numpy()*255, dtype=np.uint8)
-        # if (not draw_loss_graph):
-        #     if predictions.shape[-1]==3:
-        #         [Image.fromarray(predictions[i]).save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
-        #     else:
-        #         [Image.fromarray(np.squeeze(predictions[i]), "L").save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
-        #     save_images(predictions, (self.output_height, self.output_width),
-        #                 os.path.join(self.sample_dir, "big_tiff_image.tiff"))
+        if (not draw_loss_graph):
+            # if predictions.shape[-1]==3:
+            #     [Image.fromarray(np.array(predictions[i].numpy()*255, dtype=np.uint8)).save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
+            # else:
+            #     [Image.fromarray(np.array(np.squeeze(predictions[i].numpy()*255), dtype=np.uint8), "L").save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
+            # save_images(predictions, (self.output_height, self.output_width),
+            #             os.path.join(self.sample_dir, "big_tiff_image.tiff"))
+            # [cv2.imwrite(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg"), predictions[i].numpy()*255) for i in range(predictions.shape[0])]
+            for i in range(predictions.shape[0]):
+                img = predictions[i, :, :, 0] * 127.5 + 127.5
+                plt.imsave(fname=os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg"), arr=img)
+                plt.close()
+
         _ = plt.figure(figsize=(4, 4))
         if self.c_dim == 1:
             cmap_ = "gray"

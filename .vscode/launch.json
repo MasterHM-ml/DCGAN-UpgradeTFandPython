@@ -22,10 +22,11 @@
       "justMyCode": true,
       // "args": ["--epoch", "1", "--dataset", "fashion_mnist", "--output-height", "32", "--checkpoint-dir", "checkpoints", "--crop", "false", ]
       // "args": ["--dataset", "cifar10", "--train", "True", "--z-dim", "100", "--early-stop-count", "30", "--batch-size", "64", "--learning-rate", "0.001", "--beta1", "0.5", "--epoch", "1"]
-      // "args": ["--dataset", "cifar100", "--batch-size", "2",  "--epoch", "20", "--train", "True"]
+      // "args": ["--dataset", "cifar100", "--batch-size", "2",  "--epoch", "4", "--train", "True",]
+      // "args": ["--dataset", "cifar100", "--batch-size", "2",  "--epoch", "4", "--visualize", "True", "--generate-test-images", "1"]
       // "args": ["--dataset", "cifar10", "--batch-size", "2", "--visualize", "True", "--out-dir", "out/cifar10_2023-06-13"]
-      // "args": ["--dataset", "mnist", "--batch-size", "2",  "--epoch", "10", "--train", "True"]
-      // "args": ["--dataset", "mnist", "--batch-size", "2",  "--visualize", "True" ]
+      // "args": ["--dataset", "mnist", "--batch-size", "2",  "--epoch", "4", "--train", "True"]
+      "args": ["--dataset", "mnist", "--batch-size", "2",  "--visualize", "True",  "--generate-test-images", "1"]
     }
   ]
 }

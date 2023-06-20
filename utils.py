@@ -153,7 +153,9 @@ def visualize(generator_model, config, option, sample_dir):
 
         for idx in xrange(config.z_dim):
             print(" [*] %d" % idx)
-            z_sample = np.zeros([config.batch_size, config.z_dim])
+            # z_sample = np.zeros([config.batch_size, config.z_dim])
+            # https://github.com/carpedm20/DCGAN-tensorflow/issues/204#issuecomment-339016947
+            z_sample = np.random.uniform(-1, 1, size=(config.batch_size, config.z_dim))
             for kdx, z in enumerate(z_sample): z[idx] = values[kdx]
 
             image_set.append(generator_model(z_sample, training=False))

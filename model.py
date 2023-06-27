@@ -450,7 +450,7 @@ class DCGAN(object):
     def generate_and_save_images(self, model, epoch, test_input, draw_loss_graph=True):
         predictions = model(test_input, training=False)
         predictions = np.array(predictions.numpy()*255, dtype=np.uint8) # TODO :: check un-normalization - do I need to dis-zero-center images as well
-        [cv2.imwrite("epoch-%d-%d.jpg" % (epoch, indexxx), imggg) for indexxx, imggg in enumerate(predictions[:3])]
+        [cv2.imwrite(os.path.join(self.sample_dir, "epoch-%d-%d.jpg" % (epoch, indexxx)), imggg) for indexxx, imggg in enumerate(predictions[:3])]
         if (not draw_loss_graph):
             if predictions.shape[-1]==3:
                 [cv2.imwrite(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg"), predictions[i]) for i in range(predictions.shape[0])]

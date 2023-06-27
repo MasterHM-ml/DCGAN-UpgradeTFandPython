@@ -447,20 +447,19 @@ class DCGAN(object):
 
         return gen_loss, disc_loss
 
-    def generate_and_save_images(self, model, epoch, test_input, draw_loss_graph=True):
+    def generate_and_save_images(self, model, img_save_name_indicator, test_input, draw_loss_graph=True):
         predictions = model(test_input, training=False)
         predictions = np.array(predictions.numpy()*255, dtype=np.uint8) # TODO :: check un-normalization - do I need to dis-zero-center images as well
-        if draw_loss_graph:
-            [cv2.imwrite(os.path.join(self.sample_dir, "epoch-%d-%d.jpg" % (epoch, indexxx)), imggg) for indexxx, imggg in enumerate(predictions[:3])]
-        if (not draw_loss_graph):
-            if predictions.shape[-1]==3:
-                [cv2.imwrite(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg"), predictions[i]) for i in range(predictions.shape[0])]
-            else:
-                raise Exception("Last dimensions of images in predictions not equal to 3. got %d " % predictions.shape[-1])
-            # else:
-            #     [Image.fromarray(np.squeeze(predictions[i]), "L").save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
-            # save_images(predictions, (self.output_height, self.output_width),
-            #             os.path.join(self.sample_dir, "big_tiff_image.tiff"))
+        if type(img_save_name_indicator) == int:
+            save_string = "epoch-%d" % img_save_name_indicator
+            save_limit = 3
+        elif type(img_save_name_indicator) == str:
+            save_string = "%s-%s" % (img_save_name_indicator, self.dataset_name)
+            save_limit = test_input.shape[0]
+        for gen_image_indexer, gen_image in enumerate(predictions[:save_limit]):
+            gen_image = cv2.cvtColor(gen_image, cv2.COLOR_BGR2RGB)
+            cv2.imwrite(os.path.join(self.sample_dir, "%s-%d.jpg" % (save_string, gen_image_indexer)), gen_image)
+        
         _ = plt.figure(figsize=(4, 4))
         if self.c_dim == 1:
             cmap_ = "gray"
@@ -472,9 +471,9 @@ class DCGAN(object):
             plt.subplot(4, 4, i + 1)
             plt.imshow(predictions[i], cmap=cmap_)
             plt.axis('off')
-        plt.savefig(os.path.join(self.sample_dir, f'image_at_{epoch}.png'))
+        plt.savefig(os.path.join(self.sample_dir, f'collage-{save_string}.png'))
         plt.close()
-        # plt.show()
+
 
         if draw_loss_graph:
             pd.DataFrame(list(zip(self.losses.discriminator.epoch_loss, self.losses.generator.epoch_loss)),
@@ -499,5 +498,5 @@ class DCGAN(object):
             logging.info(f" [*] Failed to find checkpoint at {self.checkpoint_best_gen}")
             raise Exception(e)
         z = tf.random.normal([args.generate_test_images, self.z_dim])
-        self.generate_and_save_images(self.generator_model, f"generated_{self.dataset_name}_", z, draw_loss_graph=False)
+        self.generate_and_save_images(self.generator_model, "generated", z, draw_loss_graph=False)
         return True

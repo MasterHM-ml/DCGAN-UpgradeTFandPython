@@ -75,13 +75,13 @@ def transform(image, input_height, input_width,
     # if final_return.shape[-1] != 3:
     #     final_return = np.reshape(final_return, [final_return.shape[0], final_return.shape[1], 1], )
     final_return /= 255 # normalize 0-1
-    # zero - center images (using image-net MEAN and STD values - actual zero centring would require to use MEAN and STD of current dataset)
-    final_return[:, :, 0] -= 0.485
-    final_return[:, :, 0] /= 0.299
-    final_return[:, :, 1] -= 0.456
-    final_return[:, :, 1] /= 0.224
-    final_return[:, :, 2] -= 0.406
-    final_return[:, :, 2] /= 0.225
+    # # zero - center images (using image-net MEAN and STD values - actual zero centring would require to use MEAN and STD of current dataset)
+    # final_return[:, :, 0] -= 0.485
+    # final_return[:, :, 0] /= 0.299
+    # final_return[:, :, 1] -= 0.456
+    # final_return[:, :, 1] /= 0.224
+    # final_return[:, :, 2] -= 0.406
+    # final_return[:, :, 2] /= 0.225
     return final_return
 
 

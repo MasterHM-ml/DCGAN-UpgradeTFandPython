@@ -92,6 +92,7 @@ class DCGAN(object):
         self.dfc_dim = dfc_dim
 
         self.dataset_name = dataset_name
+        self.images_csv_path = images_csv_path
         self.data_dir = data_dir
         self.input_fname_pattern = input_fname_pattern
         self.out_dir = out_dir

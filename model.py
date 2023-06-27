@@ -476,7 +476,7 @@ class DCGAN(object):
         # plt.show()
 
         if draw_loss_graph:
-            pd.DataFrame([[self.losses.discriminator.epoch_loss], [self.losses.generator.epoch_loss]],
+            pd.DataFrame(list(zip(self.losses.discriminator.epoch_loss, self.losses.generator.epoch_loss)),
             columns=["DiscriminatorLoss", "GeneratorLoss"]).to_csv(os.path.join(self.sample_dir, "losses.csv"), index=False)
             _ = plt.figure(figsize=(12, 8))
             plt.plot(self.losses.discriminator.epoch_loss, label="Discriminator Loss", linewidth=2, marker="*")

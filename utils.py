@@ -81,7 +81,7 @@ def transform(image, input_height, input_width,
     final_return[:, :, 1] -= 0.456
     final_return[:, :, 1] /= 0.224
     final_return[:, :, 2] -= 0.406
-    final_return[:, :, 3] /= 0.225
+    final_return[:, :, 2] /= 0.225
     return final_return
 
 

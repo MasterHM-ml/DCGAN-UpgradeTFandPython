@@ -216,15 +216,16 @@ class DCGAN(object):
                 if np.mod(epoch, config.sample_freq) == 0:
                     self.generate_and_save_images(self.generator_model, epoch + 1, sample_z)
                 if np.mod(epoch, config.ckpt_freq) == 0:
-                    if len(glob(self.checkpoint_prefix + "*")) > (self.max_to_keep * 2):
-                        os.remove(self.checkpoint_prefix)
-                        home_dir = os.getcwd()
-                        os.chdir(self.checkpoint_dir)
-                        list_old_ckpt = glob(self.checkpoint_prefix.split("/")[-1] + "*")
-                        list_old_ckpt.sort(key= lambda x: int(x[11:].split(".")[0]))
-                        os.remove(list_old_ckpt[0])
-                        os.remove(list_old_ckpt[1])
-                        os.chdir(home_dir)
+                    # if len(glob(self.checkpoint_prefix + "*")) > (self.max_to_keep * 2):
+                    #     os.remove(self.checkpoint_prefix)
+                    #     home_dir = os.getcwd()
+                    #     os.chdir(self.checkpoint_dir)
+                    #     list_old_ckpt = glob(self.checkpoint_prefix.split("/")[-1] + "*")
+                    #     list_old_ckpt.sort(key= lambda x: int(x[11:].split(".")[0]))
+                    #     os.remove(list_old_ckpt[0])
+                    #     os.remove(list_old_ckpt[1])
+                    #     os.chdir(home_dir)
+                    [os.remove(old_model) for old_model in glob(f"{self.checkpoint_prefix}*")]
                     self.checkpoint.save(file_prefix=self.checkpoint_prefix)
 
                 if (epoch - early_stop_count_tracker) > self.early_stop_count:

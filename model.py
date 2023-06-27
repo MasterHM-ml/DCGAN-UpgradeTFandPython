@@ -188,8 +188,8 @@ class DCGAN(object):
             minimum_loss = np.Inf
             batch_tracker = 0
             for epoch in trange(config.epoch):
-                self.data_yielder = self.load_custom_dataset()
-                for idx, (batch_images, _) in enumerate(self.data_yielder):
+                self.data_yielder = self.load_custom_dataset() # * reset generator index after each epoch
+                for idx, batch_images in enumerate(self.data_yielder):
                     batch_tracker+=1
                     gl, dl = self.train_step(batch_images.as_numpy_iterator().next()) # thanks BingAI - solved TypeError: Inputs to a layer should be tensors got tensorflow.python.data.ops.dataset_ops._VariantDataset'
                     self.losses.discriminator.running_loss.append(tf.reduce_mean(dl).numpy().item())

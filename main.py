@@ -57,6 +57,7 @@ parser.add_argument("--logging-frequency", type=int, default=1, help="print log 
 parser.add_argument("--z-dim", type=int, default=100, help="dimensions of z")
 parser.add_argument("--generate-test-images", type=int, default=100,
                     help="Number of images to generate during test. [100]")
+parser.add_argument("--images-csv-path", type=str, default="/content/drive/MyDrive/Fiverr/32.DCGAN/20K_celeba_images.csv")
 
 args = parser.parse_args()
 logging.info(args)
@@ -144,7 +145,8 @@ def main(args):
         sample_dir=args.sample_dir,
         data_dir=args.data_dir,
         out_dir=args.out_dir,
-        max_to_keep=args.max_to_keep)
+        max_to_keep=args.max_to_keep,
+        images_csv_path=args.images_csv_path)
 
     logging.info("**********logging generator trainable variables**********")
     for var in dcgan.generator_model.trainable_variables:

@@ -43,7 +43,7 @@ def merge(images, size):
 def im_save(images, size, path):
     image = np.squeeze(merge(images, size)) # TODO - validate action
     if image.dtype == np.float64:
-        return Image.fromarray((image * 255).astype(np.uint8)).save(path)
+        return Image.fromarray((image * 255).astype(np.uint8)).save(path) # TODO :: check un-normalization - do I need to dis-zero-center images as well
     return Image.fromarray(image).save(path)
 
 
@@ -60,8 +60,7 @@ def center_crop(x, crop_h, crop_w,
     j = int(round((h - crop_h) / 2.))
     i = int(round((w - crop_w) / 2.))
     im = Image.fromarray(x[j:j + crop_h, i:i + crop_w])
-    # return np.array(im.resize([resize_h, resize_w]), dtype=np.float32) / 127.5 - 1.0
-    return np.array(im.resize([resize_h, resize_w]), dtype=np.float32) / 255
+    return np.array(im.resize([resize_h, resize_w]), dtype=np.float32)
 
 
 def transform(image, input_height, input_width,
@@ -72,15 +71,18 @@ def transform(image, input_height, input_width,
             resize_height, resize_width)
     else:
         image = Image.fromarray(image)
-        # final_return = np.array(image.resize([input_height, input_width]), dtype=np.float32) / 127.5 - 1.0
-        final_return = np.array(image.resize([input_height, input_width]), dtype=np.float32) / 255
-    if final_return.shape[-1] != 3:
-        final_return = np.reshape(final_return, [final_return.shape[0], final_return.shape[1], 1], )
+        final_return = np.array(image.resize([input_height, input_width]), dtype=np.float32)
+    # if final_return.shape[-1] != 3:
+    #     final_return = np.reshape(final_return, [final_return.shape[0], final_return.shape[1], 1], )
+    final_return /= 255 # normalize 0-1
+    # zero - center images (using image-net MEAN and STD values - actual zero centring would require to use MEAN and STD of current dataset)
+    final_return[:, :, 0] -= 0.485
+    final_return[:, :, 0] /= 0.299
+    final_return[:, :, 1] -= 0.456
+    final_return[:, :, 1] /= 0.224
+    final_return[:, :, 2] -= 0.406
+    final_return[:, :, 3] /= 0.225
     return final_return
-
-
-# def inverse_transform(images):
-#     return (images + 1.) / 2.
 
 
 def make_gif(images, fname, duration=2, true_image=False):
@@ -102,8 +104,7 @@ def make_gif(images, fname, duration=2, true_image=False):
       """
             from tensorflow.python.ops.numpy_ops import np_config
             np_config.enable_numpy_behavior()
-            # return ((x + 1) / 2 * 255).astype(np.uint8)
-            return (x * 255).astype(np.uint8)
+            return (x * 255).astype(np.uint8) # TODO :: check un-normalization - do I need to dis-zero-center images as well
 
     clip = mpy.VideoClip(make_frame, duration=duration)
     clip.write_gif(fname, fps=len(images) / duration)

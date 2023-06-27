@@ -47,7 +47,7 @@ class ModelLosses:
 class DCGAN(object):
     def __init__(self, input_height=108, input_width=108, crop=True,
                  batch_size=64, output_height=64, output_width=64,
-                 z_dim=100, gf_dim=64, df_dim=64, train=True, c_dim=3,
+                 z_dim=100, gf_dim=64, df_dim=64, train=True, c_dim=3, images_csv_path="/content/drive/MyDrive/Fiverr/32.DCGAN/20K_celeba_images.csv",
                  gfc_dim=1024, dfc_dim=1024, dataset_name='default',
                  max_to_keep=1, early_stop_count=20, checkpoint_prefix="checkpoint",
                  input_fname_pattern='*.jpg', checkpoint_dir='ckpts', sample_dir='samples', out_dir='./out',
@@ -107,12 +107,12 @@ class DCGAN(object):
         self.image_io_json = os.path.join(self.checkpoint_dir, "image_io.json")
 
         if self.do_training:
-            if self.dataset_name in ["mnist", "fashion_mnist", "cifar10", "cifar100"]:
-                self.data_X, self.data_Y = self.load_builtin_dataset()
-            else:
-                # self.data_X, self.data_Y = self.load_custom_dataset()
-                self.load_metadata()
-                self.data_yielder = self.load_custom_dataset()
+            # if self.dataset_name in ["mnist", "fashion_mnist", "cifar10", "cifar100"]:
+            #     self.data_X, self.data_Y = self.load_builtin_dataset()
+            # else:
+            #     # self.data_X, self.data_Y = self.load_custom_dataset()
+            self.load_metadata()
+            self.data_yielder = self.load_custom_dataset()
 
         self.build_model()
 
@@ -340,26 +340,26 @@ class DCGAN(object):
 
         return model
 
-    def load_builtin_dataset(self):
-        logging.info("Loading built-in dataset, input_height and input_width will be reset")
-        (train_images, _), (_, _) = getattr(tf.keras.datasets, self.dataset_name).load_data()
-        if train_images.shape[1] < 32: train_images = tf.pad(train_images, [[0, 0], [2, 2], [2, 2]]).numpy()
-        self.input_height = self.input_width = train_images[0].shape[0]
-        if train_images[0].shape[-1] == 3:  # either shape will be HxW or HxWx3
-            self.c_dim = 3
-        else:
-            self.c_dim = 1
-        self.num_of_images_in_dataset = train_images.shape[0]
-        train_images = train_images.reshape(train_images.shape[0], self.input_width, self.input_height,
-                                            self.c_dim).astype('float32')
-        # train_images = (train_images - 127.5) / 127.5  # Normalize the images to [-1, 1]
-        train_images = train_images / 255  # Normalize the images to [-1, 1]
-        self.buffer_size = train_images.shape[0]
-        test_dataset = np.ones(train_images.shape[0])
-        train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(self.buffer_size).batch(
-            self.batch_size)
-        test_dataset = tf.data.Dataset.from_tensor_slices(test_dataset).shuffle(self.buffer_size).batch(self.batch_size)
-        return train_dataset, test_dataset
+    # def load_builtin_dataset(self):
+    #     logging.info("Loading built-in dataset, input_height and input_width will be reset")
+    #     (train_images, _), (_, _) = getattr(tf.keras.datasets, self.dataset_name).load_data()
+    #     if train_images.shape[1] < 32: train_images = tf.pad(train_images, [[0, 0], [2, 2], [2, 2]]).numpy()
+    #     self.input_height = self.input_width = train_images[0].shape[0]
+    #     if train_images[0].shape[-1] == 3:  # either shape will be HxW or HxWx3
+    #         self.c_dim = 3
+    #     else:
+    #         self.c_dim = 1
+    #     self.num_of_images_in_dataset = train_images.shape[0]
+    #     train_images = train_images.reshape(train_images.shape[0], self.input_width, self.input_height,
+    #                                         self.c_dim).astype('float32')
+    #     # train_images = (train_images - 127.5) / 127.5  # Normalize the images to [-1, 1]
+    #     train_images = train_images / 255  # Normalize the images to [-1, 1]
+    #     self.buffer_size = train_images.shape[0]
+    #     test_dataset = np.ones(train_images.shape[0])
+    #     train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(self.buffer_size).batch(
+    #         self.batch_size)
+    #     test_dataset = tf.data.Dataset.from_tensor_slices(test_dataset).shuffle(self.buffer_size).batch(self.batch_size)
+    #     return train_dataset, test_dataset
 
     def load_metadata(self,):
         # data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
@@ -373,7 +373,8 @@ class DCGAN(object):
             % self.c_dim)
         # path_to_images = glob(data_path)
         # self.path_to_images = pd.read_csv("images.csv")["image_id"].tolist()
-        self.path_to_images = pd.read_csv("/kaggle/working/images.csv")["image_id"].tolist()
+        self.path_to_images = pd.read_csv(self.images_csv_path)["File_name"].tolist()
+
         if len(self.path_to_images) == 0: raise Exception("[!] No data found in '" + data_path + "'")
         if len(self.path_to_images) < self.batch_size: raise Exception(
             "[!] Entire dataset size is less than the configured batch_size")
@@ -392,23 +393,25 @@ class DCGAN(object):
         for batch_index in range(floor(int(self.num_of_images_in_dataset/self.batch_size))):
             image_list_for_batch = self.path_to_images[batch_index*self.batch_size:(batch_index+1)*self.batch_size]
 
-            if self.c_dim == 1:
-                data_x_np = np.stack([transform(np.array(Image.open(x).convert('L')),
-                                                self.input_height, self.input_width,
-                                                self.output_height, self.output_width, self.crop)
-                                    for x in image_list_for_batch])
-            elif self.c_dim == 3:
+            # if self.c_dim == 1:
+            #     data_x_np = np.stack([transform(np.array(Image.open(x).convert('L')),
+            #                                     self.input_height, self.input_width,
+            #                                     self.output_height, self.output_width, self.crop)
+            #                         for x in image_list_for_batch])
+            # elif self.c_dim == 3:
+            if self.c_dim == 3:
                 data_x_np = np.stack([transform(np.array(Image.open(x).convert('RGB')),
                                                 self.input_height, self.input_width,
                                                 self.output_height, self.output_width, self.crop)
                                     for x in image_list_for_batch])
             else:
                 raise Exception("[!] Unknown color dimension. Got argument 'c_dim'=%d" % self.c_dim)
-            train_dataset_y = tf.data.Dataset.from_tensor_slices(np.ones(data_x_np.shape[0])).shuffle(
-                self.buffer_size).batch(self.batch_size)
+            # train_dataset_y = tf.data.Dataset.from_tensor_slices(np.ones(data_x_np.shape[0])).shuffle(
+                # self.buffer_size).batch(self.batch_size)
             train_dataset_x = tf.data.Dataset.from_tensor_slices(data_x_np).shuffle(self.buffer_size).batch(self.batch_size)
             # return train_dataset_x, train_dataset_y
-            yield train_dataset_x, train_dataset_y
+            # yield train_dataset_x, train_dataset_y
+            yield train_dataset_x
 
     def generator_loss(self, fake_output):
         return self.cross_entropy(tf.ones_like(fake_output), fake_output)
@@ -445,13 +448,15 @@ class DCGAN(object):
 
     def generate_and_save_images(self, model, epoch, test_input, draw_loss_graph=True):
         predictions = model(test_input, training=False)
-        predictions = np.array(predictions.numpy()*255, dtype=np.uint8)
-        [cv2.imwrite("epoch-%d-%d.jpg" % (epoch, indexxx), imggg) for indexxx, imggg in enumerate(predictions[:10])]
+        predictions = np.array(predictions.numpy()*255, dtype=np.uint8) # TODO :: check un-normalization - do I need to dis-zero-center images as well
+        [cv2.imwrite("epoch-%d-%d.jpg" % (epoch, indexxx), imggg) for indexxx, imggg in enumerate(predictions[:3])]
         if (not draw_loss_graph):
             if predictions.shape[-1]==3:
-                [Image.fromarray(predictions[i]).save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
+                [cv2.imwrite(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg"), predictions[i]) for i in range(predictions.shape[0])]
             else:
-                [Image.fromarray(np.squeeze(predictions[i]), "L").save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
+                raise Exception("Last dimensions of images in predictions not equal to 3. got %d " % predictions.shape[-1])
+            # else:
+            #     [Image.fromarray(np.squeeze(predictions[i]), "L").save(os.path.join(self.sample_dir, f"generated_{self.dataset_name}_{i}.jpg")) for i in range(predictions.shape[0])]
             # save_images(predictions, (self.output_height, self.output_width),
             #             os.path.join(self.sample_dir, "big_tiff_image.tiff"))
         _ = plt.figure(figsize=(4, 4))

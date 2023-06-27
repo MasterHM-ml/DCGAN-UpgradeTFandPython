@@ -162,7 +162,7 @@ def visualize(generator_model, config, option, sample_dir):
             for kdx, z in enumerate(z_sample): z[idx] = values[kdx]
 
             image_set.append(generator_model(z_sample, training=False))
-            if image_set[0].shape[0] != 3:
+            if image_set[0].shape[-1] != 3:
                 logging.info("Cannot generate gif for images with single channel")
                 return
             make_gif(image_set[-1], os.path.join(sample_dir, 'test_gif_%s.gif' % idx))

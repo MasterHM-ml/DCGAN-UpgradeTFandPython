@@ -450,7 +450,7 @@ class DCGAN(object):
 
     def generate_and_save_images(self, model, img_save_name_indicator, test_input, draw_loss_graph=True):
         predictions = model(test_input, training=False)
-        predictions = np.array(predictions.numpy()*255, dtype=np.float32) # TODO :: check un-normalization - do I need to dis-zero-center images as well
+        predictions = np.array(predictions.numpy()*255, dtype=np.uint8) # TODO :: check un-normalization - do I need to dis-zero-center images as well
         if type(img_save_name_indicator) == int:
             save_string = "epoch-%d" % img_save_name_indicator
             save_limit = 3

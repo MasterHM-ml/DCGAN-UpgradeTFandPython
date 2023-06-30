@@ -375,7 +375,7 @@ class DCGAN(object):
             % self.c_dim)
         # path_to_images = glob(data_path)
         # self.path_to_images = pd.read_csv("images.csv")["image_id"].tolist()
-        self.path_to_images = pd.read_csv(self.images_csv_path)["File_name"].tolist()
+        self.path_to_images = pd.read_csv(self.images_csv_path)["image_id"].tolist()
 
         if len(self.path_to_images) == 0: raise Exception("[!] No data found in '" + data_path + "'")
         if len(self.path_to_images) < self.batch_size: raise Exception(

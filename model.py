@@ -152,7 +152,7 @@ class DCGAN(object):
                                                 discriminator_model=self.discriminator_model)
 
     def train(self, config):
-        sample_z = tf.random.uniform(shape=[self.batch_size, self.z_dim], minval=-1, maxval=1)
+        sample_z = tf.random.normal([self.batch_size, self.z_dim], stddev=0.2)
         self.num_of_batches = self.num_of_images_in_dataset // self.batch_size
 
         g_lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(
@@ -372,9 +372,10 @@ class DCGAN(object):
 
     @tf.function
     def train_step(self, images):
-        noise = tf.random.normal([self.batch_size, self.z_dim])
+        noise = tf.random.normal([self.batch_size, self.z_dim], stddev=0.2)
 
-        with tf.GradientTape() as gen_tape, tf.GradientTape() as gen_tape_2, tf.GradientTape() as disc_tape:
+        # with tf.GradientTape() as gen_tape, tf.GradientTape() as gen_tape_2, tf.GradientTape() as disc_tape:
+        with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
             generated_images = self.generator_model(noise, training=True)
 
             real_output = self.discriminator_model(images, training=True)
@@ -386,8 +387,8 @@ class DCGAN(object):
         # updating generator twice a step - as done in original repo
         gradients_of_generator = gen_tape.gradient(gen_loss, self.generator_model.trainable_variables)
         self.g_optim.apply_gradients(zip(gradients_of_generator, self.generator_model.trainable_variables))
-        gradients_of_generator = gen_tape_2.gradient(gen_loss, self.generator_model.trainable_variables)
-        self.g_optim.apply_gradients(zip(gradients_of_generator, self.generator_model.trainable_variables))
+        # gradients_of_generator = gen_tape_2.gradient(gen_loss, self.generator_model.trainable_variables)
+        # self.g_optim.apply_gradients(zip(gradients_of_generator, self.generator_model.trainable_variables))
 
         gradients_of_discriminator = disc_tape.gradient(disc_loss, self.discriminator_model.trainable_variables)
         self.d_optim.apply_gradients(zip(gradients_of_discriminator, self.discriminator_model.trainable_variables))
@@ -443,6 +444,7 @@ class DCGAN(object):
         except Exception as e:
             logging.info(f" [*] Failed to find checkpoint at {args.checkpoint_dir}")
             raise Exception(e)
-        z = tf.random.uniform([args.generate_test_images, self.z_dim], minval=-1, maxval=1)
+        # z = tf.random.uniform([args.generate_test_images, self.z_dim], minval=-1, maxval=1)
+        z = tf.random.normal([self.batch_size, self.z_dim], stddev=0.2)
         self.generate_and_save_images(self.generator_model, "generated", z, draw_loss_graph=False)
         return True

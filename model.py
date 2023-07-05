@@ -158,7 +158,7 @@ class DCGAN(object):
         g_lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(
             config.g_learning_rate,
             decay_steps=self.num_of_batches,
-            decay_rate=0.96,
+            decay_rate=0.9,
             staircase=True)
         d_lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(
             config.d_learning_rate,

@@ -45,7 +45,6 @@ class DCGAN(object):
     def __init__(self, input_height=108, input_width=108, crop=True,
                  batch_size=64, output_height=64, output_width=64,
                  z_dim=100, gf_dim=64, df_dim=64, train=True, retrain=False, c_dim=3, load_model_dir=None,
-                 images_csv_path="/content/drive/MyDrive/Fiverr/32.DCGAN/20K_celeba_images.csv",
                  gfc_dim=1024, dfc_dim=1024, dataset_name='default',
                  checkpoint_prefix="checkpoint",
                  input_fname_pattern='*.jpg', checkpoint_dir='ckpts', sample_dir='samples', out_dir='./out',
@@ -92,7 +91,6 @@ class DCGAN(object):
         self.dfc_dim = dfc_dim
 
         self.dataset_name = dataset_name
-        self.images_csv_path = images_csv_path
         self.data_dir = data_dir
         self.input_fname_pattern = input_fname_pattern
         self.out_dir = out_dir
@@ -332,29 +330,21 @@ class DCGAN(object):
         return model
 
     def load_metadata(self, ):
-        # data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
-        # logging.info("loading custom data from %s." % data_path)
-        if self.c_dim is None:
-            raise ValueError(
-                "with custom data, c-dim argument is required. 1 if your data is grayscale or 3 if your dataset is "
-                "RGB images")
+        data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
+        logging.info("loading custom data from %s." % data_path)
         logging.warning(
-            "Please make sure all images are either RGB (3 channels) or grayscale (1 channels). Got argument 'c_dim'=%d"
+            "Please make sure all images are either RGB (3 channels). Got argument 'c-dim'=%d"
             % self.c_dim)
-        # path_to_images = glob(data_path)
-        # self.path_to_images = pd.read_csv("images.csv")["image_id"].tolist()
-        self.path_to_images = pd.read_csv(self.images_csv_path)["image_id"].tolist()
+        self.path_to_images = glob(data_path)
 
-        if len(self.path_to_images) == 0: raise Exception("[!] No data found in '" + self.images_csv_path + "'")
+        if len(self.path_to_images) == 0: raise Exception("[!] No data found in '" + data_path + "'")
         if len(self.path_to_images) < self.batch_size: raise Exception(
             "[!] Entire dataset size is less than the configured batch_size")
 
-        if Image.open(self.path_to_images[0]).size != (self.input_width, self.input_height):
+        if Image.open(path_to_images[0]).size != (self.input_width, self.input_height):
             logging.warning("[!] Image dim, and provided input_height, input_width are not same.")
 
         self.num_of_images_in_dataset = len(self.path_to_images)
-        # print("number of images in dataset are %d " % self.num_of_images_in_dataset)
-        # print("batch size of dataset is %d " % self.batch_size)
         self.buffer_size = len(self.path_to_images)
 
     def load_custom_dataset(self):
@@ -368,12 +358,8 @@ class DCGAN(object):
                                       for x in image_list_for_batch])
             else:
                 raise Exception("[!] Unknown color dimension. Got argument 'c_dim'=%d" % self.c_dim)
-            # train_dataset_y = tf.data.Dataset.from_tensor_slices(np.ones(data_x_np.shape[0])).shuffle(
-            # self.buffer_size).batch(self.batch_size)
             train_dataset_x = tf.data.Dataset.from_tensor_slices(data_x_np).shuffle(self.buffer_size).batch(
                 self.batch_size)
-            # return train_dataset_x, train_dataset_y
-            # yield train_dataset_x, train_dataset_y
             yield train_dataset_x
 
     def generator_loss(self, fake_output):
@@ -461,6 +447,6 @@ class DCGAN(object):
         except Exception as e:
             logging.info(f" [*] Failed to find checkpoint at {args.checkpoint_dir}")
             raise Exception(e)
-        z = tf.random.normal([args.generate_test_images, self.z_dim])
+        z = tf.random.uniform([args.generate_test_images, self.z_dim], maxval=1)
         self.generate_and_save_images(self.generator_model, "generated", z, draw_loss_graph=False)
         return True

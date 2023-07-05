@@ -1,6 +1,15 @@
-import tensorflow as tf
 
-print(tf.random.normal([2, 2]))
+from math import floor
+list_ = list(range(0,1000))
+
+for batch_index in range(floor(int(1000 / 4))):
+    print(list_[batch_index * 4:(batch_index + 1) * 4])
+
+
+
+# import tensorflow as tf
+
+# print(tf.random.normal([2, 2]))
 
 
 

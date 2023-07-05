@@ -20,8 +20,8 @@ parser.add_argument("--g-learning-rate", type=float, default=0.001, help="Learni
 parser.add_argument("--d-learning-rate", type=float, default=0.0005, help="Learning rate of for adam [0.0002]")
 parser.add_argument("--beta1", type=float, default=0.5, help="Momentum term of adam [0.5]")
 parser.add_argument("--batch-size", type=int, default=64, help="The size of batch images [64]")
-parser.add_argument("--c-dim", type=int, default=None,
-                    help="The channel of images to use. 3 for RGB and 1 for grayscale")
+parser.add_argument("--c-dim", type=int, default=3,
+                    help="The channel of images to use. 3 for RGB. [3]")
 parser.add_argument("--input-height", type=int, default=96,
                     help="The size of image to use (will be center cropped). [96]")
 parser.add_argument("--input-width", type=int, default=None,
@@ -59,13 +59,11 @@ parser.add_argument("--crop", type=bool, default=False, help="True for training,
 parser.add_argument("--visualize", type=bool, default=False,
                     help=" (only for RGB) True for visualizing - create a gif of generated images [False]")
 parser.add_argument("--sample-freq", type=int, default=1, help="sample every this many epochs [1]")
-parser.add_argument("--ckpt-freq", type=int, default=1, help="save checkpoint every this many epochs [1]")
 parser.add_argument("--logging-frequency", type=int, default=1, help="print log every this many batch/iterations [1]")
 parser.add_argument("--z-dim", type=int, default=100, help="dimensions of z [100]")
 parser.add_argument("--generate-test-images", type=int, default=100,
                     help="Number of images to generate during test. [100]")
-parser.add_argument("--images-csv-path", type=str,
-                    default="/content/drive/MyDrive/Fiverr/32.DCGAN/20K_celeba_images.csv")
+
 
 arguments = parser.parse_args()
 logging.info(arguments)
@@ -163,8 +161,7 @@ def main(args: object):
         retrain=args.retrain,
         sample_dir=args.sample_dir,
         data_dir=args.data_dir,
-        out_dir=args.out_dir,
-        images_csv_path=args.images_csv_path)
+        out_dir=args.out_dir)
 
     logging.info("**********logging generator trainable variables**********")
     for var in dcgan.generator_model.trainable_variables:

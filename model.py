@@ -105,6 +105,9 @@ class DCGAN(object):
         self.out_media_epoch_path = os.path.join(self.sample_dir, "media", "epoch")
         self.out_media_collage_path = os.path.join(self.sample_dir, "media", "collage")
         self.out_sample_loss_path = os.path.join(self.sample_dir, "losses")
+        if not os.path.exists(self.out_media_collage_path): os.makedirs(self.out_media_collage_path)
+        if not os.path.exists(self.out_media_epoch_path): os.makedirs(self.out_media_epoch_path)
+        if not os.path.exists(self.out_sample_loss_path): os.makedirs(self.out_sample_loss_path)
         if self.do_retraining:
             self.image_io_json = os.path.join(self.load_model_dir, "image_io.json")
         else:

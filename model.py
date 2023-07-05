@@ -341,7 +341,7 @@ class DCGAN(object):
         if len(self.path_to_images) < self.batch_size: raise Exception(
             "[!] Entire dataset size is less than the configured batch_size")
 
-        if Image.open(path_to_images[0]).size != (self.input_width, self.input_height):
+        if Image.open(self.path_to_images[0]).size != (self.input_width, self.input_height):
             logging.warning("[!] Image dim, and provided input_height, input_width are not same.")
 
         self.num_of_images_in_dataset = len(self.path_to_images)

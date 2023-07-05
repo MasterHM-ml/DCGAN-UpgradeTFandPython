@@ -47,7 +47,8 @@ class ModelLosses:
 class DCGAN(object):
     def __init__(self, input_height=108, input_width=108, crop=True,
                  batch_size=64, output_height=64, output_width=64,
-                 z_dim=100, gf_dim=64, df_dim=64, train=True, c_dim=3, images_csv_path="/content/drive/MyDrive/Fiverr/32.DCGAN/20K_celeba_images.csv",
+                 z_dim=100, gf_dim=64, df_dim=64, train=True, retrain=False, c_dim=3,  load_model_dir=None,
+                 images_csv_path="/content/drive/MyDrive/Fiverr/32.DCGAN/20K_celeba_images.csv",
                  gfc_dim=1024, dfc_dim=1024, dataset_name='default',
                  max_to_keep=1, early_stop_count=20, checkpoint_prefix="checkpoint",
                  input_fname_pattern='*.jpg', checkpoint_dir='ckpts', sample_dir='samples', out_dir='./out',
@@ -72,10 +73,11 @@ class DCGAN(object):
         self.g_optim = None
         self.losses = None
         self.cross_entropy = None
-        self.checkpoint = None
+        self.checkpointer = None
 
         self.crop = crop
         self.do_training = train
+        self.do_retraining = retrain
 
         self.batch_size = batch_size
 
@@ -96,36 +98,36 @@ class DCGAN(object):
         self.data_dir = data_dir
         self.input_fname_pattern = input_fname_pattern
         self.out_dir = out_dir
+        self.load_model_dir = load_model_dir
         self.checkpoint_dir = checkpoint_dir
         self.checkpoint_prefix = checkpoint_prefix
         self.early_stop_count = early_stop_count
 
-        self.checkpoint_best_model = os.path.join(self.checkpoint_dir, "best_model")
-        self.checkpoint_best_gen = os.path.join(self.checkpoint_best_model, "gen")
-        self.checkpoint_best_dis = os.path.join(self.checkpoint_best_model, "dis")
+        self.checkpoint_best_model = os.path.join(self.checkpoint_dir, "best_model", "best_model")
         self.max_to_keep = max_to_keep
         self.sample_dir = sample_dir
-        self.image_io_json = os.path.join(self.checkpoint_dir, "image_io.json")
+        if self.do_retraining:
+            self.image_io_json = os.path.join(self.load_model_dir, "image_io.json")
+        else:
+            self.image_io_json = os.path.join(self.checkpoint_dir, "image_io.json")
 
-        if self.do_training:
-            # if self.dataset_name in ["mnist", "fashion_mnist", "cifar10", "cifar100"]:
-            #     self.data_X, self.data_Y = self.load_builtin_dataset()
-            # else:
-            #     # self.data_X, self.data_Y = self.load_custom_dataset()
+        if self.do_training or self.do_retraining:
             self.load_metadata()
             self.data_yielder = self.load_custom_dataset()
 
         self.build_model()
 
+
     def build_model(self):
-        if not self.do_training:
-            if len(glob((os.path.join(self.checkpoint_dir, "checkpoint*")))) == 0:
-                raise ValueError("Can't find checkpoints in %s. Did you even trained model on %s today?"
-                                 " Pass '--out-dir' from previous date e.g. ./out/cifar100_2023-06-13 if you want to generate images with older models" % (
-                    self.checkpoint_dir, self.dataset_name,))
+        if self.do_training:
+            if self.crop:
+                image_dims = [self.output_height, self.output_width, self.c_dim]
+            else:
+                image_dims = [self.input_height, self.input_width, self.c_dim]
+        else:
             if not os.path.exists(self.image_io_json):
                 raise ValueError(
-                    "Can't find crucial image_io data file under %s that was saved during training"
+                    "Can't find crucial image_io data file under %s that was saved during training/previous_training"
                     % self.image_io_json)
 
             with open(self.image_io_json, "r") as ff:
@@ -134,11 +136,7 @@ class DCGAN(object):
                 self.output_height = self.output_width = ff["output_height_width"]
                 self.c_dim = ff["channel"]
                 image_dims = [self.input_height, self.input_width, self.c_dim]
-        else:
-            if self.crop:
-                image_dims = [self.output_height, self.output_width, self.c_dim]
-            else:
-                image_dims = [self.input_height, self.input_width, self.c_dim]
+
 
         self.z = tf.Variable(tf.zeros([self.batch_size, self.z_dim]), dtype=tf.float32)
         self.generator_model = self.generator(self.z, image_dims)
@@ -150,14 +148,16 @@ class DCGAN(object):
         self.losses: ModelLosses = ModelLosses()
         self.d_optim = tf.keras.optimizers.Adam()  # .minimize(self.d_loss, var_list=self.d_vars)
         self.g_optim = tf.keras.optimizers.Adam()  # .minimize(self.g_loss, var_list=self.g_vars)
-        self.checkpoint = tf.train.Checkpoint(g_optim=self.g_optim,
+        self.checkpointer = tf.train.Checkpoint(g_optim=self.g_optim,
                                               d_optim=self.d_optim,
                                               generator_model=self.generator_model,
                                               discriminator_model=self.discriminator_model)
 
+
     def train(self, config):
-        early_stop_count_tracker = 0
-        sample_z = tf.random.normal([self.batch_size, self.z_dim])
+        # early_stop_count_tracker = 0
+        # sample_z = tf.random.normal([self.batch_size, self.z_dim])
+        sample_z = tf.random.uniform(shape=[self.batch_size, self.z_dim], minval=0, maxval=1)
         self.num_of_batches = self.num_of_images_in_dataset // self.batch_size
         
         g_lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(
@@ -177,8 +177,7 @@ class DCGAN(object):
             learning_rate=g_lr_scheduler)
 
         start_time = time.time()
-        # TODO resume training
-        with open(self.image_io_json, "w") as ff:
+        with open(os.path.join(self.checkpoint_dir, "image_io.json"), "w") as ff:
             json.dump({
                 "input_height_width": self.input_height,
                 "output_height_width": self.output_height,
@@ -216,30 +215,28 @@ class DCGAN(object):
                 if np.mod(epoch, config.sample_freq) == 0:
                     self.generate_and_save_images(self.generator_model, epoch + 1, sample_z)
                 if np.mod(epoch, config.ckpt_freq) == 0:
-                    # if len(glob(self.checkpoint_prefix + "*")) > (self.max_to_keep * 2):
-                    #     os.remove(self.checkpoint_prefix)
-                    #     home_dir = os.getcwd()
-                    #     os.chdir(self.checkpoint_dir)
-                    #     list_old_ckpt = glob(self.checkpoint_prefix.split("/")[-1] + "*")
-                    #     list_old_ckpt.sort(key= lambda x: int(x[11:].split(".")[0]))
-                    #     os.remove(list_old_ckpt[0])
-                    #     os.remove(list_old_ckpt[1])
-                    #     os.chdir(home_dir)
                     _ = [os.remove(old_model) for old_model in glob(f"{self.checkpoint_prefix}*")]
-                    self.checkpoint.save(file_prefix=self.checkpoint_prefix)
+                    self.checkpointer.save(file_prefix=self.checkpoint_prefix)
 
-                if (epoch - early_stop_count_tracker) > self.early_stop_count:
-                        logging.warning("QUIT TRAINING - Early stopping count reached. %d", self.early_stop_count)
-                        break
                 if self.losses.generator.epoch_loss[-1] < minimum_loss:
                     early_stop_count_tracker = epoch
                     minimum_loss = self.losses.generator.epoch_loss[-1]
                     _ = [os.remove(old_best) for old_best in glob(f"{self.checkpoint_best_model}*")]
-                    self.checkpoint.save(file_prefix=self.checkpoint_best_model)
-                    # tf.saved_model.save(self.generator_model, self.checkpoint_best_gen)
-                    # tf.saved_model.save(self.discriminator_model, self.checkpoint_best_dis)
+                    self.checkpointer.save(file_prefix=self.checkpoint_best_model)
                 
         logging.info("Training Completed!!!!")
+
+
+    def retrain(self, config):
+        logging.info(" [*] Reading checkpoints for retraining the model... %s" % self.config.load_model_dir)
+        try:
+            self.checkpointer.restore(tf.train.latest_checkpoint(self.config.load_model_dir))
+            logging.info("Loaded latest model from %s" % self.config.load_model_dir)
+        except Exception as e:
+            logging.info(f" [*] Failed to find checkpoint at {self.config.load_model_dir}")
+            raise Exception(e)
+        self.train(config=config)
+
 
     def discriminator(self, image_dims, ):
         model = tf.keras.Sequential()
@@ -279,6 +276,7 @@ class DCGAN(object):
         # model.add(tf.keras.layers.Activation(tf.nn.sigmoid))
         # return model, h4_logits
         return model
+
 
     def generator(self, z, image_dims):
         s_h, s_w = image_dims[0], image_dims[1]
@@ -342,26 +340,6 @@ class DCGAN(object):
 
         return model
 
-    # def load_builtin_dataset(self):
-    #     logging.info("Loading built-in dataset, input_height and input_width will be reset")
-    #     (train_images, _), (_, _) = getattr(tf.keras.datasets, self.dataset_name).load_data()
-    #     if train_images.shape[1] < 32: train_images = tf.pad(train_images, [[0, 0], [2, 2], [2, 2]]).numpy()
-    #     self.input_height = self.input_width = train_images[0].shape[0]
-    #     if train_images[0].shape[-1] == 3:  # either shape will be HxW or HxWx3
-    #         self.c_dim = 3
-    #     else:
-    #         self.c_dim = 1
-    #     self.num_of_images_in_dataset = train_images.shape[0]
-    #     train_images = train_images.reshape(train_images.shape[0], self.input_width, self.input_height,
-    #                                         self.c_dim).astype('float32')
-    #     # train_images = (train_images - 127.5) / 127.5  # Normalize the images to [-1, 1]
-    #     train_images = train_images / 255  # Normalize the images to [-1, 1]
-    #     self.buffer_size = train_images.shape[0]
-    #     test_dataset = np.ones(train_images.shape[0])
-    #     train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(self.buffer_size).batch(
-    #         self.batch_size)
-    #     test_dataset = tf.data.Dataset.from_tensor_slices(test_dataset).shuffle(self.buffer_size).batch(self.batch_size)
-    #     return train_dataset, test_dataset
 
     def load_metadata(self,):
         # data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
@@ -390,7 +368,6 @@ class DCGAN(object):
         self.buffer_size = len(self.path_to_images)
 
 
-
     def load_custom_dataset(self):
         for batch_index in range(floor(int(self.num_of_images_in_dataset/self.batch_size))):
             image_list_for_batch = self.path_to_images[batch_index*self.batch_size:(batch_index+1)*self.batch_size]
@@ -415,14 +392,17 @@ class DCGAN(object):
             # yield train_dataset_x, train_dataset_y
             yield train_dataset_x
 
+
     def generator_loss(self, fake_output):
         return self.cross_entropy(tf.ones_like(fake_output), fake_output)
+
 
     def discriminator_loss(self, real_output, fake_output):
         real_loss = self.cross_entropy(tf.ones_like(real_output), real_output)
         fake_loss = self.cross_entropy(tf.zeros_like(fake_output), fake_output)
         total_loss = real_loss + fake_loss
         return total_loss
+
 
     @tf.function
     def train_step(self, images):
@@ -447,6 +427,7 @@ class DCGAN(object):
         self.d_optim.apply_gradients(zip(gradients_of_discriminator, self.discriminator_model.trainable_variables))
 
         return gen_loss, disc_loss
+
 
     def generate_and_save_images(self, model, img_save_name_indicator, test_input, draw_loss_graph=True):
         predictions = model(test_input, training=False)
@@ -486,14 +467,15 @@ class DCGAN(object):
             plt.savefig(os.path.join(self.sample_dir, "losses.png"))
             plt.close()
 
+
     def load_and_generate_images(self, args):
         logging.info(" [*] Reading checkpoints... %s" % args.checkpoint_dir)
         try:
             if args.load_best_model_only:
-                self.checkpoint.restore(tf.train.latest_checkpoint(self.checkpoint_best_model))
+                self.checkpointer.restore(tf.train.latest_checkpoint(self.checkpoint_best_model))
                 logging.info("Loaded best model from %s" % args.checkpoint_dir)
             else:
-                self.checkpoint.restore(tf.train.latest_checkpoint(self.checkpoint_dir))
+                self.checkpointer.restore(tf.train.latest_checkpoint(self.checkpoint_dir))
                 logging.info("Loaded latest model from %s" % args.checkpoint_dir)
         except Exception as e:
             logging.info(f" [*] Failed to find checkpoint at {self.checkpoint_best_gen}")

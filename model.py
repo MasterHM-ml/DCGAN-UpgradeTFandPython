@@ -102,6 +102,9 @@ class DCGAN(object):
         self.early_stop_count = early_stop_count
 
         self.checkpoint_best_model = os.path.join(self.checkpoint_dir, "best_model", "best_model")
+        self.out_media_epoch_path = os.path.join(self.sample_dir, "media", "epoch")
+        self.out_media_collage_path = os.path.join(self.sample_dir, "media", "collage")
+        self.out_sample_loss_path = os.path.join(self.sample_dir, "losses")
         self.max_to_keep = max_to_keep
         self.sample_dir = sample_dir
         if self.do_retraining:
@@ -419,8 +422,7 @@ class DCGAN(object):
             save_limit = test_input.shape[0]
         for gen_image_indexer, gen_image in enumerate(predictions[:save_limit]):
             gen_image = cv2.cvtColor(gen_image, cv2.COLOR_BGR2RGB)
-            cv2.imwrite(os.path.join(self.sample_dir, "%s-%d.jpg" % (save_string, gen_image_indexer)), gen_image)
-
+            cv2.imwrite(os.path.join(self.out_media_epoch_path, "%s-%d.jpg" % (save_string, gen_image_indexer)), gen_image)
         _ = plt.figure(figsize=(4, 4))
         if self.c_dim == 1:
             cmap_ = "gray"
@@ -432,18 +434,18 @@ class DCGAN(object):
             plt.subplot(4, 4, i + 1)
             plt.imshow(predictions[i], cmap=cmap_)
             plt.axis('off')
-        plt.savefig(os.path.join(self.sample_dir, f'collage-{save_string}.png'))
+        plt.savefig(os.path.join(self.out_media_collage_path, f'collage-{save_string}.png'))
         plt.close()
 
         if draw_loss_graph:
             pd.DataFrame(list(zip(self.losses.discriminator.epoch_loss, self.losses.generator.epoch_loss)),
                          columns=["DiscriminatorLoss", "GeneratorLoss"]).to_csv(
-                os.path.join(self.sample_dir, "losses.csv"), index=False)
+                os.path.join(self.out_sample_loss_path, "losses.csv"), index=False)
             _ = plt.figure(figsize=(12, 8))
             plt.plot(self.losses.discriminator.epoch_loss, label="Discriminator Loss", linewidth=2, marker="*")
             plt.plot(self.losses.generator.epoch_loss, label="Generator Loss", linewidth=2, marker="*")
             plt.legend()
-            plt.savefig(os.path.join(self.sample_dir, "losses.png"))
+            plt.savefig(os.path.join(self.out_sample_loss_path, "losses.png"))
             plt.close()
 
     def load_and_generate_images(self, args):

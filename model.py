@@ -3,19 +3,18 @@ import time
 import cv2
 import json
 import math
-from math import floor
-import numpy as np
-import tensorflow as tf
-from glob import glob
-
-import cv2
-from PIL import Image
-
 import logging
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+from glob import glob
+from math import floor
+from PIL import Image
 from tqdm import trange
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-import matplotlib.pyplot as plt
+import tensorflow as tf
 
 from utils import transform
 
@@ -172,7 +171,6 @@ class DCGAN(object):
         self.g_optim = tf.keras.optimizers.Adam(
             learning_rate=g_lr_scheduler)
 
-        start_time = time.time()
         with open(os.path.join(self.checkpoint_dir, "image_io.json"), "w") as ff:
             json.dump({
                 "input_height_width": self.input_height,
@@ -181,7 +179,6 @@ class DCGAN(object):
             }, ff)
         
         start_time = time.time()
-        # TODO resume training
         with logging_redirect_tqdm():
             minimum_loss = np.Inf
             for epoch in trange(config.epoch):

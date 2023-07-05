@@ -225,7 +225,7 @@ class DCGAN(object):
                     #     os.remove(list_old_ckpt[0])
                     #     os.remove(list_old_ckpt[1])
                     #     os.chdir(home_dir)
-                    [os.remove(old_model) for old_model in glob(f"{self.checkpoint_prefix}*")]
+                    _ = [os.remove(old_model) for old_model in glob(f"{self.checkpoint_prefix}*")]
                     self.checkpoint.save(file_prefix=self.checkpoint_prefix)
 
                 if (epoch - early_stop_count_tracker) > self.early_stop_count:

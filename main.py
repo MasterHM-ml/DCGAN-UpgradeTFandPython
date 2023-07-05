@@ -6,6 +6,7 @@ import time
 import datetime
 import logging
 import argparse
+from glob import glob
 
 from model import DCGAN
 from utils import visualize, expand_path
@@ -34,18 +35,20 @@ parser.add_argument("--dataset", type=str, default="mnist", help="The name of da
 parser.add_argument("--input-fname-pattern", type=str, default="*.jpg",
                     help="Glob pattern of filename of input images [*]")
 parser.add_argument("--data-dir", type=str, default="./data", help="path to datasets [e.g. $HOME/data]")
-parser.add_argument("--out-dir", type=str, default="./out", help="Root directory for outputs. During testing, add the nested dataset name as well [e.g. $HOME/out]")
+parser.add_argument("--out-dir", type=str, default="./out", help="Root directory for outputs. During testing, add the nested dataset name "
+                    f"and time directory as well e.g. ./out/celeba_2023-07-04/06:12:11/")
 parser.add_argument("--checkpoint-dir", type=str, default="checkpoint",
-                    help="Folder (under out_root_dir/dataset+current date/) to save checkpoints e.g. "
-                         "out/mnist_2023-06-11/ here]")
+                    help="If training or retraining; it is a folder (under out_root_dir/dataset+current date/) to save checkpoints e.g. "
+                         "./out/celeba_2023-07-04/06:12:11/ **here** and if testing; this path will be used independently of out-dir. This should be a complete path e.g. ./out/celeba_2023-07-04/06:12:11/checkpoint")
 parser.add_argument("--checkpoint-prefix", type=str, default="checkpoint",
                     help="title of model checkpoints files (under checkpoint_dir/*) to save checkpoints e.g. "
-                         "out/mnist_2023-06-11/checkpoint/your model here]")
-parser.add_argument("--early-stop-count", type=int, default=20,
-                    help="Number of epochs to wait before training can be quit as model is not learning")
+                         "./out/celeba_2023-07-04/06:12:11/checkpoint/your model here]")
 parser.add_argument("--sample-dir", type=str, default="samples",
-                    help="Folder (under out_root_dir/out_name) to save samples [samples]")
+                    help="Folder (under ./out/celeba_2023-07-04/06:12:11/ here) to save samples [samples]")
 parser.add_argument("--train", type=bool, default=False, help="True for training, False for testing [False]")
+parser.add_argument("--retrain", type=bool, default=False, help="True for re-training, must pass path for already saved model to resume training default: [False]")
+parser.add_argument("--load-model-dir", type=str, default="", help="Folder path where model to load is being saved")
+parser.add_argument("--load-model-prefix", type=str, default="", help="saved model has 3 files, each start with a same prefix. Prefix under load-model-dir path")
 parser.add_argument("--load-best-model-only", type=bool, default=False,
                     help="If True, during testing,loading best model under checkpoint-dir/best_model/*, if False, "
                          "load latest model from checkpoint-dir [True]")
@@ -65,7 +68,7 @@ logging.info(args)
 
 
 def main(args):
-    # expand user name and environment variables
+    
     args.data_dir = expand_path(args.data_dir)
     args.out_dir = expand_path(args.out_dir)
     args.checkpoint_dir = expand_path(args.checkpoint_dir)
@@ -103,19 +106,24 @@ def main(args):
                      got {args.output_height}, {args.output_width} as output, while {args.input_height}\
                         and {args.input_width} as input")
 
-    if not os.path.exists(args.out_dir): os.makedirs(args.out_dir)
+    
+    args.out_dir = os.path.join(args.out_dir, args.dataset, str(time.strftime('%H:%M:%S')))
     if args.train:
-        args.out_dir = os.path.join(args.out_dir, f"{args.dataset}_{str(datetime.date.today())}")
+        args.retrain = False
         args.checkpoint_dir = os.path.join(args.out_dir, args.checkpoint_dir)
-        if os.path.exists(args.checkpoint_dir):
-            shutil.rmtree(args.checkpoint_dir)
-    elif os.path.exists(os.path.join(args.out_dir, f"{args.dataset}_{str(datetime.date.today())}")):
-        args.out_dir = os.path.join(args.out_dir, f"{args.dataset}_{str(datetime.date.today())}")
+    elif args.retrain:
+        args.train = False
+        if not os.path.exists(args.load_model_dir):
+            raise Exception("In retrain mode, path to the already saved model must be passed in --load-model-dir path")
+        if len(glob(os.path.join(args.load_model_dir, args.load_model_prefix+"*"))) != 3:
+            raise Exception("There should be exactly 3 files with %s prefix under %s. Found %d files" 
+            % (args.load_model_prefix, args.load_model_dir, len(glob(os.path.join(args.load_model_dir, args.load_model_prefix+"*")))))
         args.checkpoint_dir = os.path.join(args.out_dir, args.checkpoint_dir)
     else:
+        # assume user is passing out/dataset_name_current-data/time/ in out-dir argument for inference only
         args.checkpoint_dir = os.path.join(args.out_dir, args.checkpoint_dir)
     args.checkpoint_prefix = os.path.join(args.checkpoint_dir, args.checkpoint_prefix)
-    args.sample_dir = os.path.join(args.out_dir, f"{args.sample_dir}_{str(time.strftime('%Y-%m-%d %H:%M:%S'))}")
+    args.sample_dir = os.path.join(args.out_dir, args.sample_dir)
 
     logging.info(f"out-dir: {args.out_dir} - checkpoint-dir: {args.checkpoint_dir}"
                  f" - checkpoint-prefix: {args.checkpoint_prefix} - sample-dir: {args.sample_dir}")

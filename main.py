@@ -115,7 +115,7 @@ def main(args: object):
         args.checkpoint_dir = os.path.join(args.out_dir, args.checkpoint_dir)
     elif args.retrain:
         args.train = False
-        if not os.path.exists(args.load_model_dir):
+        if (not os.path.exists(args.load_model_dir)) or (args.load_model_dir is None):
             raise Exception("Retrain mode, path to the already saved model must be passed in --load-model-dir path")
         if len(glob(os.path.join(args.load_model_dir, args.load_model_prefix + "*"))) != 3:
             raise Exception("Retrain mode, there should be exactly 3 files with %s prefix under %s. Found %d files"

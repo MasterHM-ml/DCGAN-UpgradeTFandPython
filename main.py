@@ -29,10 +29,10 @@ parser.add_argument("--input-width", type=int, default=None,
 parser.add_argument("--output-height", type=int, default=None, help="The size of the output images to produce [None]")
 parser.add_argument("--output-width", type=int, default=None,
                     help="The size of the output images to produce. If None, same value as output_height [None]")
-parser.add_argument("--dataset", type=str, default="celeba", help="The name of dataset [celebA, landscape]")
+parser.add_argument("--data-dir", type=str, default="./data", help="path to datasets [data]")
+parser.add_argument("--dataset", type=str, default="celeba", help="The name of dataset folder under data-dir. e.g. data/landscape")
 parser.add_argument("--input-fname-pattern", type=str, default="*.jpg",
                     help="Glob pattern of filename of input images [*]")
-parser.add_argument("--data-dir", type=str, default="./data", help="path to datasets [data]")
 parser.add_argument("--out-dir", type=str, default="./output", help="Directory for saving outputs in working "
                                                                     "directory. [output]")
 parser.add_argument("--checkpoint-dir", type=str, default="checkpoint",

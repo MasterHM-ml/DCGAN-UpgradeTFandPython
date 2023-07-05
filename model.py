@@ -213,9 +213,9 @@ class DCGAN(object):
 
                 if np.mod(epoch, config.sample_freq) == 0:
                     self.generate_and_save_images(self.generator_model, epoch + 1, sample_z)
-                if np.mod(epoch, config.ckpt_freq) == 0:
-                    _ = [os.remove(old_model) for old_model in glob(f"{self.checkpoint_prefix}*")]
-                    self.checkpointer.save(file_prefix=self.checkpoint_prefix)
+                # if np.mod(epoch, config.ckpt_freq) == 0:
+                _ = [os.remove(old_model) for old_model in glob(f"{self.checkpoint_prefix}*")]
+                self.checkpointer.save(file_prefix=self.checkpoint_prefix)
 
                 if self.losses.generator.epoch_loss[-1] < minimum_loss:
                     minimum_loss = self.losses.generator.epoch_loss[-1]

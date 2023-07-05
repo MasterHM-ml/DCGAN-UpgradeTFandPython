@@ -1,9 +1,13 @@
+print((190/127)-1)
 
-from math import floor
-list_ = list(range(0,1000))
+print((0.49606299212598426+1)*127)
 
-for batch_index in range(floor(int(1000 / 4))):
-    print(list_[batch_index * 4:(batch_index + 1) * 4])
+
+# from math import floor
+# list_ = list(range(0,1000))
+
+# for batch_index in range(floor(int(1000 / 4))):
+#     print(list_[batch_index * 4:(batch_index + 1) * 4])
 
 
 

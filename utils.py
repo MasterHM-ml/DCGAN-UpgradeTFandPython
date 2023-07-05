@@ -47,7 +47,7 @@ def merge(images, size):
 def im_save(images, size, path):
     image = np.squeeze(merge(images, size))
     if image.dtype == np.float64:
-        return Image.fromarray((image * 255).astype(np.uint8)).save(path) # TODO :: check un-normalization - do I need to dis-zero-center images as well
+        return Image.fromarray(((image+1) * 127).astype(np.uint8)).save(path) # TODO :: check un-normalization - do I need to dis-zero-center images as well
     return Image.fromarray(image).save(path)
 
 
@@ -73,7 +73,8 @@ def transform(image, input_height, input_width,
         final_return = np.array(image.resize([input_height, input_width]), dtype=np.float32)
     # if final_return.shape[-1] != 3:
     #     final_return = np.reshape(final_return, [final_return.shape[0], final_return.shape[1], 1], )
-    final_return /= 255 # normalize 0-1
+    # final_return /= 127 # normalize 0-2
+    final_return = (final_return/127) - 1 # normalize -1 to 1
     # # zero - center images (using image-net MEAN and STD values - actual zero centring would require to use MEAN and STD of current dataset)
     # final_return[:, :, 0] -= 0.485
     # final_return[:, :, 0] /= 0.299
@@ -103,7 +104,7 @@ def make_gif(images, fname, duration=2, true_image=False):
       """
             from tensorflow.python.ops.numpy_ops import np_config
             np_config.enable_numpy_behavior()
-            return (x * 255).astype(np.uint8) # TODO :: check un-normalization - do I need to dis-zero-center images as well
+            return ((x+1) * 127).astype(np.uint8) # TODO :: check un-normalization - do I need to dis-zero-center images as well
 
     clip = mpy.VideoClip(make_frame, duration=duration)
     clip.write_gif(fname, fps=len(images) / duration)
@@ -153,7 +154,7 @@ def visualize(generator_model, config, option, sample_dir):
             make_gif(samples, os.path.join(sample_dir, 'test_gif_%s.gif' % idx))
     elif option == 4:
         image_set = []
-        values = np.arange(0, 1, 1. / config.batch_size)
+        values = np.arange(-1, 1, 1. / config.batch_size)
 
         for idx in xrange(config.z_dim):
             print(" [*] %d" % idx)

@@ -400,7 +400,7 @@ class DCGAN(object):
 
     def generate_and_save_images(self, model, img_save_name_indicator, test_input, draw_loss_graph=True):
         predictions = model(test_input, training=False)
-        predictions = np.array(predictions.numpy() * 255,
+        predictions = np.array((predictions.numpy()+1) * 127,
                                dtype=np.uint8)  # TODO :: check un-normalization - do I need to dis-zero-center images as well
         save_string = None
         save_limit = None
@@ -413,17 +413,13 @@ class DCGAN(object):
         for gen_image_indexer, gen_image in enumerate(predictions[:save_limit]):
             gen_image = cv2.cvtColor(gen_image, cv2.COLOR_BGR2RGB)
             cv2.imwrite(os.path.join(self.out_media_epoch_path, "%s-%d.jpg" % (save_string, gen_image_indexer)), gen_image)
-        _ = plt.figure(figsize=(4, 4))
-        if self.c_dim == 1:
-            cmap_ = "gray"
-        else:
-            cmap_ = None
-        for i in range(predictions.shape[0]):
+        _ = plt.figure(figsize=(floor(np.sqrt(self.batch_size)), floor(np.sqrt(self.batch_size))))
+        for i in range(floor(np.sqrt(self.batch_size))*floor(np.sqrt(self.batch_size))):
             if i == 16:  # TODO fix it - subplots are 16 only, will output 16 images only
                 break
             plt.subplot(4, 4, i + 1)
-            plt.imshow(predictions[i, :, :, 0] * 127.5 + 127.5, cmap=cmap_)
-            # plt.imshow(predictions[i], cmap=cmap_)
+            # plt.imshow(predictions[i, :, :, 0] * 127.5 + 127.5, cmap=cmap_)
+            plt.imshow(predictions[i], cmap=None)
             plt.axis('off')
         plt.savefig(os.path.join(self.out_media_collage_path, f'collage-{save_string}.png'))
         plt.close()

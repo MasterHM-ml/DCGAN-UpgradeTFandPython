@@ -58,7 +58,6 @@ parser.add_argument("--load-best-model-only", type=bool, default=False,
 parser.add_argument("--crop", type=bool, default=False, help="True for training, False for testing [False]")
 parser.add_argument("--visualize", type=bool, default=False,
                     help=" (only for RGB) True for visualizing - create a gif of generated images [False]")
-parser.add_argument("--max-to-keep", type=int, default=3, help="maximum number of checkpoints to keep [3]")
 parser.add_argument("--sample-freq", type=int, default=1, help="sample every this many epochs [1]")
 parser.add_argument("--ckpt-freq", type=int, default=1, help="save checkpoint every this many epochs [1]")
 parser.add_argument("--logging-frequency", type=int, default=1, help="print log every this many batch/iterations [1]")
@@ -162,11 +161,9 @@ def main(args: object):
         checkpoint_prefix=args.checkpoint_prefix,
         load_model_dir=args.load_model_dir,
         retrain=args.retrain,
-        early_stop_count=args.early_stop_count,
         sample_dir=args.sample_dir,
         data_dir=args.data_dir,
         out_dir=args.out_dir,
-        max_to_keep=args.max_to_keep,
         images_csv_path=args.images_csv_path)
 
     logging.info("**********logging generator trainable variables**********")

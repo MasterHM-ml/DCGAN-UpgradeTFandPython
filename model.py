@@ -153,7 +153,7 @@ class DCGAN(object):
                                                 discriminator_model=self.discriminator_model)
 
     def train(self, config):
-        sample_z = tf.random.uniform(shape=[self.batch_size, self.z_dim], minval=0, maxval=1)
+        sample_z = tf.random.uniform(shape=[self.batch_size, self.z_dim], minval=-1, maxval=1)
         self.num_of_batches = self.num_of_images_in_dataset // self.batch_size
 
         g_lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(
@@ -447,6 +447,6 @@ class DCGAN(object):
         except Exception as e:
             logging.info(f" [*] Failed to find checkpoint at {args.checkpoint_dir}")
             raise Exception(e)
-        z = tf.random.uniform([args.generate_test_images, self.z_dim], maxval=1)
+        z = tf.random.uniform([args.generate_test_images, self.z_dim], minval=-1, maxval=1)
         self.generate_and_save_images(self.generator_model, "generated", z, draw_loss_graph=False)
         return True

@@ -1,6 +1,5 @@
-print((190/127)-1)
-
-print((0.49606299212598426+1)*127)
+import tensorflow as tf
+print(tf.random.uniform([2, 2], minval=-1, maxval=1))
 
 
 # from math import floor

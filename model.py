@@ -1,12 +1,9 @@
-from __future__ import division
-from __future__ import print_function
-
 import os
 import time
 import cv2
 import json
 import math
-from math import ceil, floor
+from math import floor
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -19,7 +16,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 
 import matplotlib.pyplot as plt
 
-from utils import save_images, transform
+from utils import transform
 
 
 def conv_out_size_same(size, stride):
@@ -47,7 +44,7 @@ class ModelLosses:
 class DCGAN(object):
     def __init__(self, input_height=108, input_width=108, crop=True,
                  batch_size=64, output_height=64, output_width=64,
-                 z_dim=100, gf_dim=64, df_dim=64, train=True, retrain=False, c_dim=3,  load_model_dir=None,
+                 z_dim=100, gf_dim=64, df_dim=64, train=True, retrain=False, c_dim=3, load_model_dir=None,
                  images_csv_path="/content/drive/MyDrive/Fiverr/32.DCGAN/20K_celeba_images.csv",
                  gfc_dim=1024, dfc_dim=1024, dataset_name='default',
                  max_to_keep=1, early_stop_count=20, checkpoint_prefix="checkpoint",
@@ -62,6 +59,7 @@ class DCGAN(object):
         gfc_dim: (optional) Dimension of gen units for fully connected layer. [1024]
         dfc_dim: (optional) Dimension of discriminator units for fully connected layer. [1024]
         """
+        self.path_to_images = None
         self.z = None
         self.num_of_batches = None
         self.num_of_images_in_dataset = None
@@ -117,7 +115,6 @@ class DCGAN(object):
 
         self.build_model()
 
-
     def build_model(self):
         if self.do_training:
             if self.crop:
@@ -137,7 +134,6 @@ class DCGAN(object):
                 self.c_dim = ff["channel"]
                 image_dims = [self.input_height, self.input_width, self.c_dim]
 
-
         self.z = tf.Variable(tf.zeros([self.batch_size, self.z_dim]), dtype=tf.float32)
         self.generator_model = self.generator(self.z, image_dims)
         self.discriminator_model = self.discriminator(image_dims)
@@ -149,17 +145,14 @@ class DCGAN(object):
         self.d_optim = tf.keras.optimizers.Adam()  # .minimize(self.d_loss, var_list=self.d_vars)
         self.g_optim = tf.keras.optimizers.Adam()  # .minimize(self.g_loss, var_list=self.g_vars)
         self.checkpointer = tf.train.Checkpoint(g_optim=self.g_optim,
-                                              d_optim=self.d_optim,
-                                              generator_model=self.generator_model,
-                                              discriminator_model=self.discriminator_model)
-
+                                                d_optim=self.d_optim,
+                                                generator_model=self.generator_model,
+                                                discriminator_model=self.discriminator_model)
 
     def train(self, config):
-        # early_stop_count_tracker = 0
-        # sample_z = tf.random.normal([self.batch_size, self.z_dim])
         sample_z = tf.random.uniform(shape=[self.batch_size, self.z_dim], minval=0, maxval=1)
         self.num_of_batches = self.num_of_images_in_dataset // self.batch_size
-        
+
         g_lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(
             config.g_learning_rate,
             decay_steps=self.num_of_batches,
@@ -187,10 +180,13 @@ class DCGAN(object):
             minimum_loss = np.Inf
             batch_tracker = 0
             for epoch in trange(config.epoch):
-                self.data_yielder = self.load_custom_dataset() # * reset generator index after each epoch
+                self.data_yielder = self.load_custom_dataset()  # * reset generator index after each epoch
                 for idx, batch_images in enumerate(self.data_yielder):
-                    batch_tracker+=1
-                    gl, dl = self.train_step(batch_images.as_numpy_iterator().next()) # thanks BingAI - solved TypeError: Inputs to a layer should be tensors got tensorflow.python.data.ops.dataset_ops._VariantDataset'
+                    batch_tracker += 1
+                    gl, dl = self.train_step(batch_images.as_numpy_iterator().next())
+                    '''
+                    thanks BingAI - solved TypeError: Inputs to a layer should be tensors got tensorflow.python.data.ops.dataset_ops._VariantDataset
+                    '''
                     self.losses.discriminator.running_loss.append(tf.reduce_mean(dl).numpy().item())
                     self.losses.generator.running_loss.append(tf.reduce_mean(gl).numpy().item())
                     if np.mod(idx, config.logging_frequency) == 0:
@@ -219,24 +215,21 @@ class DCGAN(object):
                     self.checkpointer.save(file_prefix=self.checkpoint_prefix)
 
                 if self.losses.generator.epoch_loss[-1] < minimum_loss:
-                    early_stop_count_tracker = epoch
                     minimum_loss = self.losses.generator.epoch_loss[-1]
                     _ = [os.remove(old_best) for old_best in glob(f"{self.checkpoint_best_model}*")]
                     self.checkpointer.save(file_prefix=self.checkpoint_best_model)
-                
+
         logging.info("Training Completed!!!!")
 
-
     def retrain(self, config):
-        logging.info(" [*] Reading checkpoints for retraining the model... %s" % self.config.load_model_dir)
+        logging.info(" [*] Reading checkpoints for retraining the model... %s" % config.load_model_dir)
         try:
-            self.checkpointer.restore(tf.train.latest_checkpoint(self.config.load_model_dir))
-            logging.info("Loaded latest model from %s" % self.config.load_model_dir)
+            self.checkpointer.restore(tf.train.latest_checkpoint(config.load_model_dir))
+            logging.info("Loaded latest model from %s" % config.load_model_dir)
         except Exception as e:
-            logging.info(f" [*] Failed to find checkpoint at {self.config.load_model_dir}")
+            logging.info(f" [*] Failed to find checkpoint at {config.load_model_dir}")
             raise Exception(e)
         self.train(config=config)
-
 
     def discriminator(self, image_dims, ):
         model = tf.keras.Sequential()
@@ -270,13 +263,7 @@ class DCGAN(object):
                                         kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02,
                                                                                               seed=None),
                                         bias_initializer=tf.keras.initializers.Constant(value=0), ))
-        # h4_logits = model.get_layer('h4')
-        # TODO whether to comment/uncomment - verify from old train method
-        # either old repo uses h4 or sigmoid
-        # model.add(tf.keras.layers.Activation(tf.nn.sigmoid))
-        # return model, h4_logits
         return model
-
 
     def generator(self, z, image_dims):
         s_h, s_w = image_dims[0], image_dims[1]
@@ -340,8 +327,7 @@ class DCGAN(object):
 
         return model
 
-
-    def load_metadata(self,):
+    def load_metadata(self, ):
         # data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
         # logging.info("loading custom data from %s." % data_path)
         if self.c_dim is None:
@@ -355,54 +341,45 @@ class DCGAN(object):
         # self.path_to_images = pd.read_csv("images.csv")["image_id"].tolist()
         self.path_to_images = pd.read_csv(self.images_csv_path)["image_id"].tolist()
 
-        if len(self.path_to_images) == 0: raise Exception("[!] No data found in '" + data_path + "'")
+        if len(self.path_to_images) == 0: raise Exception("[!] No data found in '" + self.images_csv_path + "'")
         if len(self.path_to_images) < self.batch_size: raise Exception(
             "[!] Entire dataset size is less than the configured batch_size")
 
         if Image.open(self.path_to_images[0]).size != (self.input_width, self.input_height):
             logging.warning("[!] Image dim, and provided input_height, input_width are not same.")
-        
+
         self.num_of_images_in_dataset = len(self.path_to_images)
         # print("number of images in dataset are %d " % self.num_of_images_in_dataset)
         # print("batch size of dataset is %d " % self.batch_size)
         self.buffer_size = len(self.path_to_images)
 
-
     def load_custom_dataset(self):
-        for batch_index in range(floor(int(self.num_of_images_in_dataset/self.batch_size))):
-            image_list_for_batch = self.path_to_images[batch_index*self.batch_size:(batch_index+1)*self.batch_size]
-
-            # if self.c_dim == 1:
-            #     data_x_np = np.stack([transform(np.array(Image.open(x).convert('L')),
-            #                                     self.input_height, self.input_width,
-            #                                     self.output_height, self.output_width, self.crop)
-            #                         for x in image_list_for_batch])
-            # elif self.c_dim == 3:
+        for batch_index in range(floor(int(self.num_of_images_in_dataset / self.batch_size))):
+            image_list_for_batch = self.path_to_images[
+                                   batch_index * self.batch_size:(batch_index + 1) * self.batch_size]
             if self.c_dim == 3:
                 data_x_np = np.stack([transform(np.array(Image.open(x).convert('RGB')),
                                                 self.input_height, self.input_width,
                                                 self.output_height, self.output_width, self.crop)
-                                    for x in image_list_for_batch])
+                                      for x in image_list_for_batch])
             else:
                 raise Exception("[!] Unknown color dimension. Got argument 'c_dim'=%d" % self.c_dim)
             # train_dataset_y = tf.data.Dataset.from_tensor_slices(np.ones(data_x_np.shape[0])).shuffle(
-                # self.buffer_size).batch(self.batch_size)
-            train_dataset_x = tf.data.Dataset.from_tensor_slices(data_x_np).shuffle(self.buffer_size).batch(self.batch_size)
+            # self.buffer_size).batch(self.batch_size)
+            train_dataset_x = tf.data.Dataset.from_tensor_slices(data_x_np).shuffle(self.buffer_size).batch(
+                self.batch_size)
             # return train_dataset_x, train_dataset_y
             # yield train_dataset_x, train_dataset_y
             yield train_dataset_x
 
-
     def generator_loss(self, fake_output):
         return self.cross_entropy(tf.ones_like(fake_output), fake_output)
-
 
     def discriminator_loss(self, real_output, fake_output):
         real_loss = self.cross_entropy(tf.ones_like(real_output), real_output)
         fake_loss = self.cross_entropy(tf.zeros_like(fake_output), fake_output)
         total_loss = real_loss + fake_loss
         return total_loss
-
 
     @tf.function
     def train_step(self, images):
@@ -428,10 +405,12 @@ class DCGAN(object):
 
         return gen_loss, disc_loss
 
-
     def generate_and_save_images(self, model, img_save_name_indicator, test_input, draw_loss_graph=True):
         predictions = model(test_input, training=False)
-        predictions = np.array(predictions.numpy()*255, dtype=np.uint8) # TODO :: check un-normalization - do I need to dis-zero-center images as well
+        predictions = np.array(predictions.numpy() * 255,
+                               dtype=np.uint8)  # TODO :: check un-normalization - do I need to dis-zero-center images as well
+        save_string = None
+        save_limit = None
         if type(img_save_name_indicator) == int:
             save_string = "epoch-%d" % img_save_name_indicator
             save_limit = 3
@@ -441,7 +420,7 @@ class DCGAN(object):
         for gen_image_indexer, gen_image in enumerate(predictions[:save_limit]):
             gen_image = cv2.cvtColor(gen_image, cv2.COLOR_BGR2RGB)
             cv2.imwrite(os.path.join(self.sample_dir, "%s-%d.jpg" % (save_string, gen_image_indexer)), gen_image)
-        
+
         _ = plt.figure(figsize=(4, 4))
         if self.c_dim == 1:
             cmap_ = "gray"
@@ -456,17 +435,16 @@ class DCGAN(object):
         plt.savefig(os.path.join(self.sample_dir, f'collage-{save_string}.png'))
         plt.close()
 
-
         if draw_loss_graph:
             pd.DataFrame(list(zip(self.losses.discriminator.epoch_loss, self.losses.generator.epoch_loss)),
-            columns=["DiscriminatorLoss", "GeneratorLoss"]).to_csv(os.path.join(self.sample_dir, "losses.csv"), index=False)
+                         columns=["DiscriminatorLoss", "GeneratorLoss"]).to_csv(
+                os.path.join(self.sample_dir, "losses.csv"), index=False)
             _ = plt.figure(figsize=(12, 8))
             plt.plot(self.losses.discriminator.epoch_loss, label="Discriminator Loss", linewidth=2, marker="*")
             plt.plot(self.losses.generator.epoch_loss, label="Generator Loss", linewidth=2, marker="*")
             plt.legend()
             plt.savefig(os.path.join(self.sample_dir, "losses.png"))
             plt.close()
-
 
     def load_and_generate_images(self, args):
         logging.info(" [*] Reading checkpoints... %s" % args.checkpoint_dir)
@@ -478,7 +456,7 @@ class DCGAN(object):
                 self.checkpointer.restore(tf.train.latest_checkpoint(self.checkpoint_dir))
                 logging.info("Loaded latest model from %s" % args.checkpoint_dir)
         except Exception as e:
-            logging.info(f" [*] Failed to find checkpoint at {self.checkpoint_best_gen}")
+            logging.info(f" [*] Failed to find checkpoint at {args.checkpoint_dir}")
             raise Exception(e)
         z = tf.random.normal([args.generate_test_images, self.z_dim])
         self.generate_and_save_images(self.generator_model, "generated", z, draw_loss_graph=False)

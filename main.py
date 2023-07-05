@@ -1,16 +1,14 @@
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-import shutil
-import json
-import time
-import datetime
-import logging
 import argparse
+import json
+import logging
+import os
+import time
 from glob import glob
 
 from model import DCGAN
 from utils import visualize, expand_path
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s.%(msecs)03d [%(filename)s:%(lineno)d] %(levelname)s %(message)s",
                     datefmt="%Y-%m-%d %H:%M:%S", )
@@ -35,7 +33,8 @@ parser.add_argument("--dataset", type=str, default="celeba", help="The name of d
 parser.add_argument("--input-fname-pattern", type=str, default="*.jpg",
                     help="Glob pattern of filename of input images [*]")
 parser.add_argument("--data-dir", type=str, default="./data", help="path to datasets [data]")
-parser.add_argument("--out-dir", type=str, default="./output", help="Directory for saving outputs in working directory. [output]")
+parser.add_argument("--out-dir", type=str, default="./output", help="Directory for saving outputs in working "
+                                                                    "directory. [output]")
 parser.add_argument("--checkpoint-dir", type=str, default="checkpoint",
                     help="If training or retraining; it is a folder (under out-dir/dataset+current date/) to save checkpoints e.g. "
                          "./output/celeba_2023-07-04/06:12:11/ **checkpoint-dir here** and if testing; "
@@ -47,14 +46,18 @@ parser.add_argument("--checkpoint-prefix", type=str, default="checkpoint",
 parser.add_argument("--sample-dir", type=str, default="samples",
                     help="Folder (under ./out/celeba_2023-07-04/06:12:11/ here) to save samples [./output/celeba_2023-07-04/06:12:11/samples here]")
 parser.add_argument("--train", type=bool, default=False, help="True for training, False for testing [False]")
-parser.add_argument("--retrain", type=bool, default=False, help="True for re-training, must pass path for already saved model to resume training default: [False]")
-parser.add_argument("--load-model-dir", type=str, default=None, help="Folder path where model to load is being saved [None]")
-parser.add_argument("--load-model-prefix", type=str, default=None, help="saved model has 3 files, each start with a same prefix. Prefix under load-model-dir path [None]")
+parser.add_argument("--retrain", type=bool, default=False,
+                    help="True for re-training, must pass path for already saved model to resume training default: [False]")
+parser.add_argument("--load-model-dir", type=str, default=None,
+                    help="Folder path where model to load is being saved [None]")
+parser.add_argument("--load-model-prefix", type=str, default=None,
+                    help="saved model has 3 files, each start with a same prefix. Prefix under load-model-dir path [None]")
 parser.add_argument("--load-best-model-only", type=bool, default=False,
                     help="If True, during testing,loading best model under checkpoint-dir/best_model/*, if False, "
                          "load latest model from checkpoint-dir [False]")
 parser.add_argument("--crop", type=bool, default=False, help="True for training, False for testing [False]")
-parser.add_argument("--visualize", type=bool, default=False, help=" (only for RGB) True for visualizing - create a gif of generated images [False]")
+parser.add_argument("--visualize", type=bool, default=False,
+                    help=" (only for RGB) True for visualizing - create a gif of generated images [False]")
 parser.add_argument("--max-to-keep", type=int, default=3, help="maximum number of checkpoints to keep [3]")
 parser.add_argument("--sample-freq", type=int, default=1, help="sample every this many epochs [1]")
 parser.add_argument("--ckpt-freq", type=int, default=1, help="save checkpoint every this many epochs [1]")
@@ -62,14 +65,14 @@ parser.add_argument("--logging-frequency", type=int, default=1, help="print log 
 parser.add_argument("--z-dim", type=int, default=100, help="dimensions of z [100]")
 parser.add_argument("--generate-test-images", type=int, default=100,
                     help="Number of images to generate during test. [100]")
-parser.add_argument("--images-csv-path", type=str, default="/content/drive/MyDrive/Fiverr/32.DCGAN/20K_celeba_images.csv")
+parser.add_argument("--images-csv-path", type=str,
+                    default="/content/drive/MyDrive/Fiverr/32.DCGAN/20K_celeba_images.csv")
 
-args = parser.parse_args()
-logging.info(args)
+arguments = parser.parse_args()
+logging.info(arguments)
 
 
-def main(args):
-    
+def main(args: object):
     args.data_dir = expand_path(args.data_dir)
     args.out_dir = expand_path(args.out_dir)
     args.checkpoint_dir = expand_path(args.checkpoint_dir)
@@ -107,7 +110,6 @@ def main(args):
                      got {args.output_height}, {args.output_width} as output, while {args.input_height}\
                         and {args.input_width} as input")
 
-    
     args.out_dir = os.path.join(args.out_dir, args.dataset, str(time.strftime('%Y-%m-%d %H:%M:%S')))
     if args.train:
         args.retrain = False
@@ -116,18 +118,20 @@ def main(args):
         args.train = False
         if not os.path.exists(args.load_model_dir):
             raise Exception("Retrain mode, path to the already saved model must be passed in --load-model-dir path")
-        if len(glob(os.path.join(args.load_model_dir, args.load_model_prefix+"*"))) != 3:
-            raise Exception("Retrain mode, there should be exactly 3 files with %s prefix under %s. Found %d files" 
-            % (args.load_model_prefix, args.load_model_dir, len(glob(os.path.join(args.load_model_dir, args.load_model_prefix+"*")))))
+        if len(glob(os.path.join(args.load_model_dir, args.load_model_prefix + "*"))) != 3:
+            raise Exception("Retrain mode, there should be exactly 3 files with %s prefix under %s. Found %d files"
+                            % (args.load_model_prefix, args.load_model_dir,
+                               len(glob(os.path.join(args.load_model_dir, args.load_model_prefix + "*")))))
         args.checkpoint_dir = os.path.join(args.out_dir, args.checkpoint_dir)
     else:
         args.train, args.retrain = False, False
         if not os.path.exists(args.checkpoint_dir):
             raise Exception("Inference mode: Can't find provided checkpoint directory at %s " % args.checkpoint_dir)
-        if len(glob(os.path.join(args.checkpoint_dir, args.checkpoint_prefix+"*"))) != 3:
-            raise Exception("Inference mode, there should be exactly 3 files with %s prefix under %s. Found %d files" 
-            % (args.checkpoint_prefix, args.checkpoint_dir, len(glob(os.path.join(args.checkpoint_dir, args.checkpoint_prefix+"*")))))
-    
+        if len(glob(os.path.join(args.checkpoint_dir, args.checkpoint_prefix + "*"))) != 3:
+            raise Exception("Inference mode, there should be exactly 3 files with %s prefix under %s. Found %d files"
+                            % (args.checkpoint_prefix, args.checkpoint_dir,
+                               len(glob(os.path.join(args.checkpoint_dir, args.checkpoint_prefix + "*")))))
+
     args.checkpoint_prefix = os.path.join(args.checkpoint_dir, args.checkpoint_prefix)
     args.sample_dir = os.path.join(args.out_dir, args.sample_dir)
 
@@ -176,7 +180,7 @@ def main(args):
         logging.info("***************** TRAINING *****************")
         dcgan.train(args)
     elif args.retrain:
-        logging.info("***************** TRAINING *****************")
+        logging.info("***************** RE-TRAINING *****************")
         dcgan.retrain(args)
     else:
         logging.info("***************** TESTING *****************")
@@ -188,4 +192,4 @@ def main(args):
 
 
 if __name__ == '__main__':
-    main(args)
+    main(args=arguments)

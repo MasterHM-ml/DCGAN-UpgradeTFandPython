@@ -187,7 +187,6 @@ class DCGAN(object):
             for epoch in trange(config.epoch):
                 self.data_yielder = self.load_custom_dataset()  # * reset generator index after each epoch
                 for idx, batch_images in enumerate(self.data_yielder):
-                    batch_tracker += 1
                     gl, dl = self.train_step(batch_images.as_numpy_iterator().next())
                     '''
                     thanks BingAI - solved TypeError: Inputs to a layer should be tensors got tensorflow.python.data.ops.dataset_ops._VariantDataset
@@ -215,10 +214,10 @@ class DCGAN(object):
 
                 if np.mod(epoch, config.sample_freq) == 0:
                     self.generate_and_save_images(self.generator_model, epoch + 1, sample_z)
-                # if np.mod(epoch, config.ckpt_freq) == 0:
+                # save checkpoint
                 _ = [os.remove(old_model) for old_model in glob(f"{self.checkpoint_prefix}*")]
                 self.checkpointer.save(file_prefix=self.checkpoint_prefix)
-
+                # save best model
                 if self.losses.generator.epoch_loss[-1] < minimum_loss:
                     minimum_loss = self.losses.generator.epoch_loss[-1]
                     _ = [os.remove(old_best) for old_best in glob(f"{self.checkpoint_best_model}*")]

@@ -47,7 +47,7 @@ class DCGAN(object):
                  z_dim=100, gf_dim=64, df_dim=64, train=True, retrain=False, c_dim=3, load_model_dir=None,
                  images_csv_path="/content/drive/MyDrive/Fiverr/32.DCGAN/20K_celeba_images.csv",
                  gfc_dim=1024, dfc_dim=1024, dataset_name='default',
-                 max_to_keep=1, early_stop_count=20, checkpoint_prefix="checkpoint",
+                 checkpoint_prefix="checkpoint",
                  input_fname_pattern='*.jpg', checkpoint_dir='ckpts', sample_dir='samples', out_dir='./out',
                  data_dir='./data'):
         """
@@ -96,17 +96,15 @@ class DCGAN(object):
         self.data_dir = data_dir
         self.input_fname_pattern = input_fname_pattern
         self.out_dir = out_dir
+        self.sample_dir = sample_dir
         self.load_model_dir = load_model_dir
         self.checkpoint_dir = checkpoint_dir
         self.checkpoint_prefix = checkpoint_prefix
-        self.early_stop_count = early_stop_count
 
         self.checkpoint_best_model = os.path.join(self.checkpoint_dir, "best_model", "best_model")
         self.out_media_epoch_path = os.path.join(self.sample_dir, "media", "epoch")
         self.out_media_collage_path = os.path.join(self.sample_dir, "media", "collage")
         self.out_sample_loss_path = os.path.join(self.sample_dir, "losses")
-        self.max_to_keep = max_to_keep
-        self.sample_dir = sample_dir
         if self.do_retraining:
             self.image_io_json = os.path.join(self.load_model_dir, "image_io.json")
         else:
